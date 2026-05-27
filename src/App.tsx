@@ -406,9 +406,9 @@ function TrafegoView() {
               borderRadius: 12, padding: "18px 20px",
               animation: "glow 3s ease-in-out infinite",
             }}>
-              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a", marginBottom: 8, letterSpacing: 1 }}>{k.label}</div>
+              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#a78bfa", marginBottom: 8, letterSpacing: 1 }}>{k.label}</div>
               <div style={{ fontSize: 30, fontWeight: 900, color: k.color, fontFamily: "'Cinzel', serif", letterSpacing: -1 }}>{k.val}</div>
-              <div style={{ fontSize: 10, color: "#5a3a8a", marginTop: 4, fontFamily: "'Lato', sans-serif" }}>{k.sub}</div>
+              <div style={{ fontSize: 10, color: "#9d8bbf", marginTop: 4, fontFamily: "'Lato', sans-serif" }}>{k.sub}</div>
             </div>
           ))}
         </div>
