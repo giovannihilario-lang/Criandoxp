@@ -258,11 +258,15 @@ export default function App() {
 
   useEffect(() => { loadRows(mes); }, [mes, loadRows]);
 
-  // ── Safe polling: pauses when editing, merges instead of overwriting ──
-  useEffect(() => {
-    const interval = setInterval(() => loadRows(mes, true), 15000);
-    return () => clearInterval(interval);
-  }, [mes, loadRows]);
+useEffect(() => {
+  const interval = setInterval(() => {
+    // Pausa se qualquer input/textarea/select estiver focado
+    const tag = document.activeElement?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    loadRows(mes, true);
+  }, 15000);
+  return () => clearInterval(interval);
+}, [mes, loadRows]);
 
   // ── Debounced upsert ──
   const scheduleUpsert = useCallback((row: Row) => {
