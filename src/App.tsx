@@ -224,7 +224,7 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
         color: value ? "#e2d0ff" : "#5a3a8a", fontSize: 12,
         fontFamily: "'Lato', sans-serif", cursor: "text",
         borderRadius: 4, transition: "background 0.15s",
-        whiteSpace: "pre-wrap", wordBreak: "break-word",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}
       onMouseEnter={e => (e.currentTarget.style.background = "#2d1b69")}
       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
