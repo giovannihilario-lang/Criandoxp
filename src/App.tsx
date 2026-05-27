@@ -17,12 +17,22 @@ const FORMATO_OPTIONS = ["Post","Reels","Story","Carrossel","Live","Shorts","Thr
 const REDE_OPTIONS = ["Instagram","TikTok","YouTube","Twitter/X","Facebook","Todos"];
 type Status = typeof STATUS_OPTIONS[number];
 
-const STATUS_COLORS: Record<Status, { bg: string; text: string; border: string }> = {
-  "Planejado":    { bg: "#3d2068", text: "#c9a0f5", border: "#6b3fa0" },
-  "Em produção":  { bg: "#2a1a5e", text: "#93c5fd", border: "#3b5bdb" },
-  "Agendado":     { bg: "#1e3a5f", text: "#6ee7b7", border: "#059669" },
-  "Publicado":    { bg: "#1a3a1a", text: "#86efac", border: "#16a34a" },
-  "Cancelado":    { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626" },
+// ─── Ícones das redes ──────────────────────────────────────────────────────
+const REDE_ICONS: Record<string, string> = {
+  "Instagram": "/icons/instagram.png",
+  "TikTok":    "/icons/tiktok.png",
+  "YouTube":   "/icons/youtube.png",
+  "Twitter/X": "/icons/twitter.png",
+  "Facebook":  "/icons/facebook.png",
+  "Todos":     "/icons/todos.png",
+};
+
+const STATUS_COLORS: Record<Status, { bg: string; text: string; border: string; rowBg: string }> = {
+  "Planejado":    { bg: "#3d2068", text: "#c9a0f5", border: "#6b3fa0", rowBg: "rgba(61,32,104,0.18)" },
+  "Em produção":  { bg: "#2a1a5e", text: "#93c5fd", border: "#3b5bdb", rowBg: "rgba(42,26,94,0.22)" },
+  "Agendado":     { bg: "#1e3a5f", text: "#6ee7b7", border: "#059669", rowBg: "rgba(30,58,95,0.22)" },
+  "Publicado":    { bg: "#1a3a1a", text: "#86efac", border: "#16a34a", rowBg: "rgba(26,58,26,0.22)" },
+  "Cancelado":    { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626", rowBg: "rgba(58,26,26,0.22)" },
 };
 
 interface Row {
@@ -43,7 +53,7 @@ interface ColDef {
   key: keyof Row;
   label: string;
   width: number;
-  type: "text" | "select" | "select-simple";
+  type: "text" | "select" | "select-simple" | "select-rede";
   options?: readonly string[];
   placeholder?: string;
   wide?: boolean;
@@ -52,7 +62,7 @@ interface ColDef {
 const COLS: ColDef[] = [
   { key: "postagem",      label: "Postagem",       width: 90,  type: "text",          placeholder: "Postagem" },
   { key: "data",          label: "📅 Data",         width: 110, type: "text",          placeholder: "dd/mm/aaaa" },
-  { key: "rede",          label: "🌐 Rede",          width: 110, type: "select-simple", options: REDE_OPTIONS },
+  { key: "rede",          label: "🌐 Rede",          width: 120, type: "select-rede",   options: REDE_OPTIONS },
   { key: "formato",       label: "🎞 Formato",       width: 110, type: "select-simple", options: FORMATO_OPTIONS },
   { key: "tema",          label: "✨ Tema",           width: 160, type: "text",          placeholder: "Título / tema do post", wide: true },
   { key: "briefing",      label: "📝 Briefing",      width: 240, type: "text",          placeholder: "Descrição, referências, copy...", wide: true },
@@ -105,7 +115,7 @@ interface EditableCellProps {
   onChange: (val: string) => void;
   onFocus?: () => void;
   onBlur?: () => void;
-  type?: "text" | "select" | "select-simple";
+  type?: "text" | "select" | "select-simple" | "select-rede";
   options?: readonly string[];
   placeholder?: string;
   wide?: boolean;
@@ -114,15 +124,8 @@ interface EditableCellProps {
 function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options, placeholder, wide }: EditableCellProps) {
   const [editing, setEditing] = useState(false);
 
-  const handleFocus = () => {
-    setEditing(true);
-    onFocus?.();
-  };
-
-  const handleBlur = () => {
-    setEditing(false);
-    onBlur?.();
-  };
+  const handleFocus = () => { setEditing(true); onFocus?.(); };
+  const handleBlur  = () => { setEditing(false); onBlur?.(); };
 
   if (type === "select") {
     const c = STATUS_COLORS[value as Status] ?? { bg: "#2d1b69", text: "#c9a0f5", border: "#6b3fa0" };
@@ -140,6 +143,30 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
         }}>
         {options!.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
+    );
+  }
+
+  if (type === "select-rede") {
+    const icon = REDE_ICONS[value] ?? REDE_ICONS["Todos"];
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+        <img src={icon} alt={value || "rede"} style={{ width: 18, height: 18, objectFit: "contain", borderRadius: 3 }} />
+        <select
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          style={{
+            background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a",
+            borderRadius: 6, padding: "4px 6px", fontSize: 12,
+            fontFamily: "'Cinzel', serif", cursor: "pointer", flex: 1, outline: "none",
+          }}>
+          <option value="">--</option>
+          {options!.map(o => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
+      </div>
     );
   }
 
@@ -206,16 +233,7 @@ export default function App() {
   const [loading, setLoading]       = useState(true);
   const [syncStatus, setSyncStatus] = useState<"ok" | "saving" | "error">("ok");
 
-  // ── NEW: track editing focus depth so polling is paused while any cell is active ──
-  const editingCount = useRef(0);
-  const isEditing = () => editingCount.current > 0;
-
-  const handleCellFocus = () => { editingCount.current += 1; };
-  const handleCellBlur  = () => { editingCount.current = Math.max(0, editingCount.current - 1); };
-
-  // Track which row IDs have pending saves — polling won't overwrite these
   const pendingUpserts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  // Keep latest rows accessible inside async callbacks without stale closure
   const rowsRef = useRef<Row[]>([]);
 
   const setRowsSafe = (updater: (prev: Row[]) => Row[]) => {
@@ -226,11 +244,7 @@ export default function App() {
     });
   };
 
-  // ── Initial load ──
   const loadRows = useCallback(async (m: number, force = false) => {
-    // ── PAUSE POLL WHILE USER IS EDITING ──
-    if (force && isEditing()) return;
-
     if (!force) setLoading(true);
     try {
       const data = await dbLoad(m);
@@ -258,17 +272,15 @@ export default function App() {
 
   useEffect(() => { loadRows(mes); }, [mes, loadRows]);
 
-useEffect(() => {
-  const interval = setInterval(() => {
-    // Pausa se qualquer input/textarea/select estiver focado
-    const tag = document.activeElement?.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-    loadRows(mes, true);
-  }, 15000);
-  return () => clearInterval(interval);
-}, [mes, loadRows]);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      loadRows(mes, true);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [mes, loadRows]);
 
-  // ── Debounced upsert ──
   const scheduleUpsert = useCallback((row: Row) => {
     setSyncStatus("saving");
     const existing = pendingUpserts.current.get(row.id);
@@ -298,25 +310,31 @@ useEffect(() => {
   const addRow = async () => {
     const row = makeRow(rowsRef.current.length + 1, mes);
     setRowsSafe(prev => [...prev, row]);
-    try {
-      await dbUpsert(row);
-    } catch {
-      setSyncStatus("error");
-    }
+    try { await dbUpsert(row); } catch { setSyncStatus("error"); }
+  };
+
+  // ── Duplicar linha ──
+  const duplicateRow = async (source: Row) => {
+    const row: Row = {
+      ...source,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      postagem: `${source.postagem} (cópia)`,
+      status: "Planejado",
+    };
+    setRowsSafe(prev => {
+      const idx = prev.findIndex(r => r.id === source.id);
+      const next = [...prev];
+      next.splice(idx + 1, 0, row);
+      return next;
+    });
+    try { await dbUpsert(row); } catch { setSyncStatus("error"); }
   };
 
   const removeRow = async (id: string) => {
     const pending = pendingUpserts.current.get(id);
-    if (pending) {
-      clearTimeout(pending);
-      pendingUpserts.current.delete(id);
-    }
+    if (pending) { clearTimeout(pending); pendingUpserts.current.delete(id); }
     setRowsSafe(prev => prev.filter(r => r.id !== id));
-    try {
-      await dbDelete(id);
-    } catch {
-      setSyncStatus("error");
-    }
+    try { await dbDelete(id); } catch { setSyncStatus("error"); }
   };
 
   const filtered = rows.filter(r =>
@@ -350,6 +368,8 @@ useEffect(() => {
         @keyframes glow  { 0%,100%{box-shadow:0 0 20px #7c3aed44} 50%{box-shadow:0 0 40px #7c3aed88} }
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes spin  { to{transform:rotate(360deg)} }
+        tr.status-row { transition: background 0.15s, box-shadow 0.15s; }
+        tr.status-row:hover td { filter: brightness(1.15); }
       `}</style>
 
       {/* HEADER */}
@@ -368,12 +388,8 @@ useEffect(() => {
             Calendário de Postagem
           </div>
         </div>
-
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <span style={{
-            fontSize: 11, color: syncColor,
-            animation: syncStatus === "saving" ? "blink 1s infinite" : "none",
-          }}>
+          <span style={{ fontSize: 11, color: syncColor, animation: syncStatus === "saving" ? "blink 1s infinite" : "none" }}>
             {syncLabel}
           </span>
           <span style={{ fontSize: 10, color: "#3d1b69" }}>• atualiza a cada 15s</span>
@@ -447,7 +463,7 @@ useEffect(() => {
         <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900 }}>
           <thead>
             <tr style={{ background: "linear-gradient(90deg, #2d1b69, #3d1b8a, #2d1b69)" }}>
-              <th style={{ width: 36, padding: "12px 8px", borderRight: "1px solid #4a2a8a" }} />
+              <th style={{ width: 50, padding: "12px 8px", borderRight: "1px solid #4a2a8a" }} />
               {COLS.map(col => (
                 <th key={col.key} style={{
                   width: col.width, padding: "12px 10px", textAlign: "left",
@@ -469,43 +485,62 @@ useEffect(() => {
                 </td>
               </tr>
             )}
-            {filtered.map((row, idx) => (
-              <tr key={row.id}
-                style={{ background: idx % 2 === 0 ? "#110828" : "#0d0720", transition: "background 0.15s" }}
-                onMouseEnter={e => (e.currentTarget.style.background = "#1e0f45")}
-                onMouseLeave={e => (e.currentTarget.style.background = idx % 2 === 0 ? "#110828" : "#0d0720")}
-              >
-                <td style={{
-                  padding: "6px 4px", textAlign: "center",
-                  borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45",
-                  fontSize: 10, color: "#5a3a8a",
-                }}>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                    <span>{idx + 1}</span>
-                    <button onClick={() => removeRow(row.id)}
-                      style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }}
-                      onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
-                      onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}
-                    >✕</button>
-                  </div>
-                </td>
-                {COLS.map(col => (
-                  <td key={col.key} style={{
-                    padding: "4px 6px", borderRight: "1px solid #1e0f45",
-                    borderBottom: "1px solid #1e0f45", verticalAlign: "top",
+            {filtered.map((row, idx) => {
+              const sc = STATUS_COLORS[row.status];
+              const baseBg = sc ? sc.rowBg : (idx % 2 === 0 ? "#110828" : "#0d0720");
+              return (
+                <tr
+                  key={row.id}
+                  className="status-row"
+                  style={{
+                    background: baseBg,
+                    borderLeft: sc ? `3px solid ${sc.border}` : "3px solid transparent",
+                    transition: "background 0.15s",
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#1e0f45")}
+                  onMouseLeave={e => (e.currentTarget.style.background = baseBg)}
+                >
+                  <td style={{
+                    padding: "6px 4px", textAlign: "center",
+                    borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45",
+                    fontSize: 10, color: "#5a3a8a",
                   }}>
-                    <EditableCell
-                      value={String(row[col.key] ?? "")}
-                      onChange={val => updateRow(row.id, col.key, val)}
-                      onFocus={handleCellFocus}
-                      onBlur={handleCellBlur}
-                      type={col.type} options={col.options}
-                      placeholder={col.placeholder} wide={col.wide}
-                    />
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                      <span style={{ color: "#5a3a8a" }}>{idx + 1}</span>
+                      {/* Duplicar */}
+                      <button
+                        onClick={() => duplicateRow(row)}
+                        title="Duplicar"
+                        style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }}
+                        onMouseEnter={e => (e.currentTarget.style.color = "#c084fc")}
+                        onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}
+                      >📋</button>
+                      {/* Deletar */}
+                      <button
+                        onClick={() => removeRow(row.id)}
+                        title="Deletar"
+                        style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }}
+                        onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
+                        onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}
+                      >✕</button>
+                    </div>
                   </td>
-                ))}
-              </tr>
-            ))}
+                  {COLS.map(col => (
+                    <td key={col.key} style={{
+                      padding: "4px 6px", borderRight: "1px solid #1e0f45",
+                      borderBottom: "1px solid #1e0f45", verticalAlign: "top",
+                    }}>
+                      <EditableCell
+                        value={String(row[col.key] ?? "")}
+                        onChange={val => updateRow(row.id, col.key, val)}
+                        type={col.type} options={col.options}
+                        placeholder={col.placeholder} wide={col.wide}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -523,7 +558,7 @@ useEffect(() => {
           onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 15px #7c3aed44"; }}
         >+ Adicionar Postagem</button>
         <span style={{ color: "#5a3a8a", fontSize: 11 }}>
-          Clique em qualquer célula para editar · salvo automaticamente no banco
+          Clique em qualquer célula para editar · 📋 duplicar · ✕ deletar · salvo automaticamente
         </span>
       </div>
 
