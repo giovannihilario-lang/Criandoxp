@@ -377,7 +377,7 @@ export default function App() {
         display: "flex", alignItems: "center", gap: 20, marginBottom: 22,
         borderBottom: "2px solid #4a2a8a", paddingBottom: 18, flexWrap: "wrap",
       }}>
-        <div style={{ animation: "float 4s ease-in-out infinite", fontSize: 48 }}>🎲</div>
+        <img src="/icons/criandoxp.png" alt="Criando XP" style={{ width: 56, height: 56, objectFit: "contain", animation: "float 4s ease-in-out infinite" }} />
         <div>
           <div style={{
             fontFamily: "'Cinzel', serif", fontSize: 24, fontWeight: 900,
@@ -566,7 +566,7 @@ export default function App() {
         marginTop: 36, textAlign: "center", color: "#3d1b69",
         fontSize: 10, fontFamily: "'Cinzel', serif", letterSpacing: 2,
       }}>
-        🎲 CRIANDO XP · CALENDÁRIO DE CONTEÚDO · {MONTHS[mes].toUpperCase()}
+        <img src="/icons/criandoxp.png" alt="Criando XP" style={{ width: 16, height: 16, objectFit: "contain", verticalAlign: "middle", marginRight: 4 }} />CRIANDO XP · CALENDÁRIO DE CONTEÚDO · {MONTHS[mes].toUpperCase()}
       </div>
     </div>
   );
