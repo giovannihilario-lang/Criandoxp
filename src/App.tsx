@@ -12,10 +12,12 @@ const TABLE = `${SUPABASE_URL}/rest/v1/postagens`;
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const WEEKDAYS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const STATUS_OPTIONS = ["Planejado","Em produção","Agendado","Publicado","Cancelado"] as const;
 const FORMATO_OPTIONS = ["Post","Reels","Story","Carrossel","Live","Shorts","Thread"];
 const REDE_OPTIONS = ["Instagram","TikTok","YouTube","Twitter/X","Facebook","Todos"];
 type Status = typeof STATUS_OPTIONS[number];
+type ViewMode = "tabela" | "calendario";
 
 // ─── Ícones das redes ──────────────────────────────────────────────────────
 const REDE_ICONS: Record<string, string> = {
@@ -27,12 +29,12 @@ const REDE_ICONS: Record<string, string> = {
   "Todos":     "/icons/todos.png",
 };
 
-const STATUS_COLORS: Record<Status, { bg: string; text: string; border: string; rowBg: string }> = {
-  "Planejado":    { bg: "#3d2068", text: "#c9a0f5", border: "#6b3fa0", rowBg: "rgba(61,32,104,0.18)" },
-  "Em produção":  { bg: "#2a1a5e", text: "#93c5fd", border: "#3b5bdb", rowBg: "rgba(42,26,94,0.22)" },
-  "Agendado":     { bg: "#1e3a5f", text: "#6ee7b7", border: "#059669", rowBg: "rgba(30,58,95,0.22)" },
-  "Publicado":    { bg: "#1a3a1a", text: "#86efac", border: "#16a34a", rowBg: "rgba(26,58,26,0.22)" },
-  "Cancelado":    { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626", rowBg: "rgba(58,26,26,0.22)" },
+const STATUS_COLORS: Record<Status, { bg: string; text: string; border: string; rowBg: string; calBg: string }> = {
+  "Planejado":    { bg: "#3d2068", text: "#c9a0f5", border: "#6b3fa0", rowBg: "rgba(61,32,104,0.18)",  calBg: "#3d2068dd" },
+  "Em produção":  { bg: "#2a1a5e", text: "#93c5fd", border: "#3b5bdb", rowBg: "rgba(42,26,94,0.22)",   calBg: "#2a1a5edd" },
+  "Agendado":     { bg: "#1e3a5f", text: "#6ee7b7", border: "#059669", rowBg: "rgba(30,58,95,0.22)",   calBg: "#1e3a5fdd" },
+  "Publicado":    { bg: "#1a3a1a", text: "#86efac", border: "#16a34a", rowBg: "rgba(26,58,26,0.22)",   calBg: "#1a3a1add" },
+  "Cancelado":    { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626", rowBg: "rgba(58,26,26,0.22)",   calBg: "#3a1a1add" },
 };
 
 // ─── Urgência de data ──────────────────────────────────────────────────────
@@ -202,7 +204,6 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
     );
   }
 
-  // Campo de data com badge de urgência
   const us = urgency ? URGENCY_STYLES[urgency] : null;
 
   return editing ? (
@@ -243,6 +244,275 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
   );
 }
 
+// ─── CalendarView ──────────────────────────────────────────────────────────
+interface CalendarViewProps {
+  rows: Row[];
+  mes: number;
+  onSelectDay: (rows: Row[], day: number) => void;
+}
+
+function CalendarView({ rows, mes, onSelectDay }: CalendarViewProps) {
+  const year = new Date().getFullYear();
+  const firstDay = new Date(year, mes, 1).getDay();
+  const daysInMonth = new Date(year, mes + 1, 0).getDate();
+  const today = new Date();
+  const isCurrentMonth = today.getMonth() === mes && today.getFullYear() === year;
+  const todayDay = isCurrentMonth ? today.getDate() : -1;
+
+  // Map day → rows
+  const byDay: Record<number, Row[]> = {};
+  rows.forEach(r => {
+    const d = parseDateBR(r.data);
+    if (d && d.getMonth() === mes && d.getFullYear() === year) {
+      const day = d.getDate();
+      if (!byDay[day]) byDay[day] = [];
+      byDay[day].push(r);
+    }
+  });
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  return (
+    <div style={{ padding: "0 0 8px" }}>
+      {/* Weekday headers */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(7, 1fr)",
+        gap: 4, marginBottom: 4,
+      }}>
+        {WEEKDAYS.map(w => (
+          <div key={w} style={{
+            textAlign: "center", padding: "6px 0",
+            fontFamily: "'Cinzel', serif", fontSize: 10,
+            color: "#7c3aed", fontWeight: 700, letterSpacing: 1,
+          }}>{w}</div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(7, 1fr)",
+        gap: 4,
+      }}>
+        {cells.map((day, idx) => {
+          if (day === null) {
+            return <div key={`empty-${idx}`} style={{ minHeight: 80 }} />;
+          }
+
+          const dayRows = byDay[day] ?? [];
+          const isToday = day === todayDay;
+          const hasUrgent = dayRows.some(r => {
+            const u = getUrgency(r.data, r.status);
+            return u === "hoje" || u === "amanha";
+          });
+
+          return (
+            <div
+              key={day}
+              onClick={() => dayRows.length > 0 && onSelectDay(dayRows, day)}
+              style={{
+                minHeight: 80,
+                background: isToday
+                  ? "linear-gradient(135deg, #3d1b8a55, #7c3aed33)"
+                  : "#110828",
+                border: isToday
+                  ? "2px solid #7c3aed"
+                  : hasUrgent
+                  ? "1px solid #ef4444"
+                  : "1px solid #2d1b69",
+                borderRadius: 8,
+                padding: "6px 6px 4px",
+                cursor: dayRows.length > 0 ? "pointer" : "default",
+                transition: "all 0.15s",
+                position: "relative",
+                overflow: "hidden",
+              }}
+              onMouseEnter={e => {
+                if (dayRows.length > 0) {
+                  e.currentTarget.style.borderColor = "#7c3aed";
+                  e.currentTarget.style.background = "#1e0f45";
+                }
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = isToday ? "#7c3aed" : hasUrgent ? "#ef4444" : "#2d1b69";
+                e.currentTarget.style.background = isToday
+                  ? "linear-gradient(135deg, #3d1b8a55, #7c3aed33)"
+                  : "#110828";
+              }}
+            >
+              {/* Pulsing dot for urgent */}
+              {hasUrgent && (
+                <span style={{
+                  position: "absolute", top: 5, right: 5,
+                  width: 7, height: 7, borderRadius: "50%",
+                  background: "#ef4444",
+                  animation: "pulse-red 1s ease-in-out infinite",
+                  display: "block",
+                }} />
+              )}
+
+              {/* Day number */}
+              <div style={{
+                fontFamily: "'Cinzel', serif",
+                fontSize: isToday ? 13 : 11,
+                fontWeight: isToday ? 900 : 400,
+                color: isToday ? "#c084fc" : "#5a3a8a",
+                marginBottom: 4,
+              }}>{day}</div>
+
+              {/* Post chips */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {dayRows.slice(0, 3).map(r => {
+                  const sc = STATUS_COLORS[r.status];
+                  const icon = REDE_ICONS[r.rede];
+                  return (
+                    <div key={r.id} style={{
+                      background: sc.calBg,
+                      border: `1px solid ${sc.border}`,
+                      borderRadius: 4,
+                      padding: "2px 4px",
+                      display: "flex", alignItems: "center", gap: 3,
+                    }}>
+                      {icon && (
+                        <img src={icon} alt={r.rede}
+                          style={{ width: 10, height: 10, objectFit: "contain", borderRadius: 2, flexShrink: 0 }} />
+                      )}
+                      <span style={{
+                        fontSize: 9, color: sc.text,
+                        fontFamily: "'Lato', sans-serif",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        maxWidth: "100%",
+                      }}>
+                        {r.tema || r.postagem}
+                      </span>
+                    </div>
+                  );
+                })}
+                {dayRows.length > 3 && (
+                  <div style={{
+                    fontSize: 9, color: "#7c3aed",
+                    fontFamily: "'Cinzel', serif",
+                    textAlign: "center",
+                  }}>+{dayRows.length - 3} mais</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── DayPanel ─────────────────────────────────────────────────────────────
+interface DayPanelProps {
+  day: number;
+  mes: number;
+  rows: Row[];
+  onClose: () => void;
+}
+
+function DayPanel({ day, mes, rows, onClose }: DayPanelProps) {
+  return (
+    <div style={{
+      marginTop: 16,
+      background: "linear-gradient(135deg, #1a0d3a, #2d1b69)",
+      border: "1px solid #4a2a8a",
+      borderRadius: 14,
+      padding: "18px 20px",
+      animation: "glow 4s ease-in-out infinite",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{
+          fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 700,
+          color: "#c084fc", letterSpacing: 2,
+        }}>
+          📅 {day} de {MONTHS[mes]} — {rows.length} postagem{rows.length !== 1 ? "s" : ""}
+        </div>
+        <button onClick={onClose} style={{
+          background: "none", border: "1px solid #4a2a8a", borderRadius: 6,
+          color: "#5a3a8a", cursor: "pointer", padding: "4px 10px",
+          fontFamily: "'Cinzel', serif", fontSize: 11,
+          transition: "all 0.15s",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = "#4a2a8a"; e.currentTarget.style.color = "#5a3a8a"; }}
+        >✕ Fechar</button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {rows.map(r => {
+          const sc = STATUS_COLORS[r.status];
+          const urgency = getUrgency(r.data, r.status);
+          const us = urgency ? URGENCY_STYLES[urgency] : null;
+          const icon = REDE_ICONS[r.rede];
+          return (
+            <div key={r.id} style={{
+              background: sc.rowBg,
+              border: `1px solid ${us ? us.border : sc.border}`,
+              borderLeft: `4px solid ${us ? us.border : sc.border}`,
+              borderRadius: 8,
+              padding: "10px 14px",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: "8px 16px",
+            }}>
+              <div>
+                <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>POSTAGEM</div>
+                <div style={{ fontSize: 12, color: "#e2d0ff" }}>{r.postagem}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>TEMA</div>
+                <div style={{ fontSize: 12, color: "#e2d0ff" }}>{r.tema || "—"}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>REDE</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    {icon && <img src={icon} alt={r.rede} style={{ width: 14, height: 14, objectFit: "contain" }} />}
+                    <span style={{ fontSize: 12, color: "#e2d0ff" }}>{r.rede || "—"}</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>FORMATO</div>
+                <div style={{ fontSize: 12, color: "#e2d0ff" }}>{r.formato || "—"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>RESPONSÁVEL</div>
+                <div style={{ fontSize: 12, color: "#e2d0ff" }}>{r.responsavel || "—"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>STATUS</div>
+                <span style={{
+                  background: sc.bg, color: sc.text, border: `1px solid ${sc.border}`,
+                  borderRadius: 5, padding: "2px 7px", fontSize: 10,
+                  fontFamily: "'Cinzel', serif", fontWeight: 700,
+                }}>{r.status}</span>
+                {us && (
+                  <span style={{
+                    marginLeft: 6, background: us.badgeBg, color: us.badgeColor,
+                    fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel', serif",
+                    borderRadius: 4, padding: "1px 5px", letterSpacing: 1,
+                    animation: us.anim,
+                  }}>{us.badge}</span>
+                )}
+              </div>
+              {r.briefing && (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>BRIEFING</div>
+                  <div style={{ fontSize: 12, color: "#c9a0f5", lineHeight: 1.5 }}>{r.briefing}</div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── App ───────────────────────────────────────────────────────────────────
 export default function App() {
   const [rows, setRows]             = useState<Row[]>([]);
@@ -251,6 +521,8 @@ export default function App() {
   const [filterRede, setFilterRede] = useState("Todos");
   const [loading, setLoading]       = useState(true);
   const [syncStatus, setSyncStatus] = useState<"ok" | "saving" | "error">("ok");
+  const [viewMode, setViewMode]     = useState<ViewMode>("tabela");
+  const [selectedDay, setSelectedDay] = useState<{ day: number; rows: Row[] } | null>(null);
 
   const pendingUpserts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const rowsRef = useRef<Row[]>([]);
@@ -289,7 +561,10 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => { loadRows(mes); }, [mes, loadRows]);
+  useEffect(() => {
+    setSelectedDay(null);
+    loadRows(mes);
+  }, [mes, loadRows]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -360,7 +635,6 @@ export default function App() {
     (filterRede === "Todos" || r.rede === filterRede || r.rede === "Todos")
   );
 
-  // Contagem de alertas para exibir no header
   const urgentCount = rows.filter(r => getUrgency(r.data, r.status) !== null).length;
 
   const selectStyle: React.CSSProperties = {
@@ -371,6 +645,10 @@ export default function App() {
 
   const syncLabel = syncStatus === "saving" ? "Salvando..." : syncStatus === "error" ? "⚠ Erro de conexão" : "✓ Sincronizado";
   const syncColor = syncStatus === "saving" ? "#c084fc" : syncStatus === "error" ? "#f87171" : "#6ee7b7";
+
+  const handleSelectDay = (dayRows: Row[], day: number) => {
+    setSelectedDay(prev => prev?.day === day ? null : { day, rows: dayRows });
+  };
 
   return (
     <div style={{
@@ -429,7 +707,7 @@ export default function App() {
       </div>
 
       {/* FILTERS */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
         <select value={mes} onChange={e => setMes(Number(e.target.value))} style={selectStyle}>
           {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
         </select>
@@ -446,6 +724,36 @@ export default function App() {
           borderRadius: 8, padding: "7px 14px", fontFamily: "'Cinzel', serif",
           fontSize: 11, cursor: "pointer",
         }}>⟳ Atualizar</button>
+
+        {/* VIEW TOGGLE */}
+        <div style={{
+          marginLeft: "auto",
+          display: "flex", background: "#0d0720",
+          border: "1px solid #4a2a8a", borderRadius: 10, overflow: "hidden",
+        }}>
+          {(["tabela", "calendario"] as ViewMode[]).map(mode => (
+            <button
+              key={mode}
+              onClick={() => { setViewMode(mode); setSelectedDay(null); }}
+              style={{
+                background: viewMode === mode
+                  ? "linear-gradient(135deg, #4a2a8a, #7c3aed)"
+                  : "transparent",
+                color: viewMode === mode ? "#fff" : "#5a3a8a",
+                border: "none",
+                padding: "7px 16px",
+                fontFamily: "'Cinzel', serif",
+                fontSize: 11, fontWeight: 700,
+                cursor: "pointer",
+                letterSpacing: 1,
+                transition: "all 0.2s",
+                display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              {mode === "tabela" ? "≡ Tabela" : "📅 Calendário"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* STATS */}
@@ -474,124 +782,186 @@ export default function App() {
         </div>
       </div>
 
-      {/* TABLE */}
-      <div style={{
-        overflowX: "auto", borderRadius: 16, border: "1px solid #4a2a8a",
-        animation: "glow 4s ease-in-out infinite", position: "relative",
-      }}>
-        {loading && (
+      {/* CALENDAR VIEW */}
+      {viewMode === "calendario" && (
+        <div>
           <div style={{
-            position: "absolute", inset: 0, background: "#0d072099",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            zIndex: 10, borderRadius: 16,
+            borderRadius: 16, border: "1px solid #4a2a8a",
+            animation: "glow 4s ease-in-out infinite",
+            padding: "16px",
+            background: "#0d072088",
+            position: "relative",
           }}>
-            <div style={{
-              width: 32, height: 32, border: "3px solid #4a2a8a",
-              borderTop: "3px solid #c084fc", borderRadius: "50%",
-              animation: "spin 0.8s linear infinite",
-            }} />
-          </div>
-        )}
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900 }}>
-          <thead>
-            <tr style={{ background: "linear-gradient(90deg, #2d1b69, #3d1b8a, #2d1b69)" }}>
-              <th style={{ width: 50, padding: "12px 8px", borderRight: "1px solid #4a2a8a" }} />
-              {COLS.map(col => (
-                <th key={col.key} style={{
-                  width: col.width, padding: "12px 10px", textAlign: "left",
-                  fontFamily: "'Cinzel', serif", fontSize: 10, fontWeight: 700,
-                  color: "#c084fc", letterSpacing: 1, textTransform: "uppercase",
-                  borderRight: "1px solid #4a2a8a", whiteSpace: "nowrap",
-                }}>{col.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {!loading && filtered.length === 0 && (
-              <tr>
-                <td colSpan={COLS.length + 1} style={{
-                  padding: 48, textAlign: "center", color: "#5a3a8a",
-                  fontFamily: "'Cinzel', serif", fontSize: 13,
-                }}>
-                  {rows.length === 0 ? "Nenhuma postagem ainda. Clique em + Adicionar." : "Nenhuma postagem com esse filtro."}
-                </td>
-              </tr>
+            {loading && (
+              <div style={{
+                position: "absolute", inset: 0, background: "#0d072099",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                zIndex: 10, borderRadius: 16,
+              }}>
+                <div style={{
+                  width: 32, height: 32, border: "3px solid #4a2a8a",
+                  borderTop: "3px solid #c084fc", borderRadius: "50%",
+                  animation: "spin 0.8s linear infinite",
+                }} />
+              </div>
             )}
-            {filtered.map((row, idx) => {
-              const urgency = getUrgency(row.data, row.status);
-              const us = urgency ? URGENCY_STYLES[urgency] : null;
-              const sc = STATUS_COLORS[row.status];
-              // Urgência tem prioridade sobre cor de status
-              const baseBg  = us ? us.rowBg  : (sc ? sc.rowBg  : (idx % 2 === 0 ? "#110828" : "#0d0720"));
-              const baseBorder = us ? us.border : (sc ? sc.border : "transparent");
-              return (
-                <tr
-                  key={row.id}
-                  className="status-row"
-                  style={{
-                    background: baseBg,
-                    borderLeft: `3px solid ${baseBorder}`,
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#1e0f45")}
-                  onMouseLeave={e => (e.currentTarget.style.background = baseBg)}
-                >
-                  <td style={{
-                    padding: "6px 4px", textAlign: "center",
-                    borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45",
-                    fontSize: 10, color: "#5a3a8a",
-                  }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                      <span style={{ color: "#5a3a8a" }}>{idx + 1}</span>
-                      <button onClick={() => duplicateRow(row)} title="Duplicar"
-                        style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }}
-                        onMouseEnter={e => (e.currentTarget.style.color = "#c084fc")}
-                        onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}
-                      >📋</button>
-                      <button onClick={() => removeRow(row.id)} title="Deletar"
-                        style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }}
-                        onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
-                        onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}
-                      >✕</button>
-                    </div>
-                  </td>
+            <CalendarView
+              rows={filtered}
+              mes={mes}
+              onSelectDay={handleSelectDay}
+            />
+          </div>
+
+          {/* Day detail panel */}
+          {selectedDay && (
+            <DayPanel
+              day={selectedDay.day}
+              mes={mes}
+              rows={selectedDay.rows}
+              onClose={() => setSelectedDay(null)}
+            />
+          )}
+
+          {/* Add button for calendar view too */}
+          <div style={{ marginTop: 14, display: "flex", gap: 12, alignItems: "center" }}>
+            <button onClick={addRow} style={{
+              background: "linear-gradient(135deg, #4a2a8a, #7c3aed)", color: "#fff",
+              border: "none", borderRadius: 10, padding: "10px 24px",
+              fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700,
+              cursor: "pointer", letterSpacing: 1, transition: "all 0.2s",
+              boxShadow: "0 4px 15px #7c3aed44",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 25px #7c3aed66"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 15px #7c3aed44"; }}
+            >+ Adicionar Postagem</button>
+            <span style={{ color: "#5a3a8a", fontSize: 11 }}>
+              Clique em um dia com posts para ver detalhes · ponto vermelho = urgente
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* TABLE VIEW */}
+      {viewMode === "tabela" && (
+        <>
+          <div style={{
+            overflowX: "auto", borderRadius: 16, border: "1px solid #4a2a8a",
+            animation: "glow 4s ease-in-out infinite", position: "relative",
+          }}>
+            {loading && (
+              <div style={{
+                position: "absolute", inset: 0, background: "#0d072099",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                zIndex: 10, borderRadius: 16,
+              }}>
+                <div style={{
+                  width: 32, height: 32, border: "3px solid #4a2a8a",
+                  borderTop: "3px solid #c084fc", borderRadius: "50%",
+                  animation: "spin 0.8s linear infinite",
+                }} />
+              </div>
+            )}
+            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900 }}>
+              <thead>
+                <tr style={{ background: "linear-gradient(90deg, #2d1b69, #3d1b8a, #2d1b69)" }}>
+                  <th style={{ width: 50, padding: "12px 8px", borderRight: "1px solid #4a2a8a" }} />
                   {COLS.map(col => (
-                    <td key={col.key} style={{
-                      padding: "4px 6px", borderRight: "1px solid #1e0f45",
-                      borderBottom: "1px solid #1e0f45", verticalAlign: "top",
-                    }}>
-                      <EditableCell
-                        value={String(row[col.key] ?? "")}
-                        onChange={val => updateRow(row.id, col.key, val)}
-                        type={col.type} options={col.options}
-                        placeholder={col.placeholder} wide={col.wide}
-                        urgency={col.key === "data" ? urgency : undefined}
-                      />
-                    </td>
+                    <th key={col.key} style={{
+                      width: col.width, padding: "12px 10px", textAlign: "left",
+                      fontFamily: "'Cinzel', serif", fontSize: 10, fontWeight: 700,
+                      color: "#c084fc", letterSpacing: 1, textTransform: "uppercase",
+                      borderRight: "1px solid #4a2a8a", whiteSpace: "nowrap",
+                    }}>{col.label}</th>
                   ))}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {!loading && filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={COLS.length + 1} style={{
+                      padding: 48, textAlign: "center", color: "#5a3a8a",
+                      fontFamily: "'Cinzel', serif", fontSize: 13,
+                    }}>
+                      {rows.length === 0 ? "Nenhuma postagem ainda. Clique em + Adicionar." : "Nenhuma postagem com esse filtro."}
+                    </td>
+                  </tr>
+                )}
+                {filtered.map((row, idx) => {
+                  const urgency = getUrgency(row.data, row.status);
+                  const us = urgency ? URGENCY_STYLES[urgency] : null;
+                  const sc = STATUS_COLORS[row.status];
+                  const baseBg  = us ? us.rowBg  : (sc ? sc.rowBg  : (idx % 2 === 0 ? "#110828" : "#0d0720"));
+                  const baseBorder = us ? us.border : (sc ? sc.border : "transparent");
+                  return (
+                    <tr
+                      key={row.id}
+                      className="status-row"
+                      style={{
+                        background: baseBg,
+                        borderLeft: `3px solid ${baseBorder}`,
+                        transition: "background 0.15s",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#1e0f45")}
+                      onMouseLeave={e => (e.currentTarget.style.background = baseBg)}
+                    >
+                      <td style={{
+                        padding: "6px 4px", textAlign: "center",
+                        borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45",
+                        fontSize: 10, color: "#5a3a8a",
+                      }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                          <span style={{ color: "#5a3a8a" }}>{idx + 1}</span>
+                          <button onClick={() => duplicateRow(row)} title="Duplicar"
+                            style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }}
+                            onMouseEnter={e => (e.currentTarget.style.color = "#c084fc")}
+                            onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}
+                          >📋</button>
+                          <button onClick={() => removeRow(row.id)} title="Deletar"
+                            style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }}
+                            onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
+                            onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}
+                          >✕</button>
+                        </div>
+                      </td>
+                      {COLS.map(col => (
+                        <td key={col.key} style={{
+                          padding: "4px 6px", borderRight: "1px solid #1e0f45",
+                          borderBottom: "1px solid #1e0f45", verticalAlign: "top",
+                        }}>
+                          <EditableCell
+                            value={String(row[col.key] ?? "")}
+                            onChange={val => updateRow(row.id, col.key, val)}
+                            type={col.type} options={col.options}
+                            placeholder={col.placeholder} wide={col.wide}
+                            urgency={col.key === "data" ? urgency : undefined}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-      {/* ADD ROW */}
-      <div style={{ marginTop: 14, display: "flex", gap: 12, alignItems: "center" }}>
-        <button onClick={addRow} style={{
-          background: "linear-gradient(135deg, #4a2a8a, #7c3aed)", color: "#fff",
-          border: "none", borderRadius: 10, padding: "10px 24px",
-          fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700,
-          cursor: "pointer", letterSpacing: 1, transition: "all 0.2s",
-          boxShadow: "0 4px 15px #7c3aed44",
-        }}
-          onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 25px #7c3aed66"; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 15px #7c3aed44"; }}
-        >+ Adicionar Postagem</button>
-        <span style={{ color: "#5a3a8a", fontSize: 11 }}>
-          Clique em qualquer célula para editar · 📋 duplicar · ✕ deletar · salvo automaticamente
-        </span>
-      </div>
+          {/* ADD ROW */}
+          <div style={{ marginTop: 14, display: "flex", gap: 12, alignItems: "center" }}>
+            <button onClick={addRow} style={{
+              background: "linear-gradient(135deg, #4a2a8a, #7c3aed)", color: "#fff",
+              border: "none", borderRadius: 10, padding: "10px 24px",
+              fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700,
+              cursor: "pointer", letterSpacing: 1, transition: "all 0.2s",
+              boxShadow: "0 4px 15px #7c3aed44",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 25px #7c3aed66"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 15px #7c3aed44"; }}
+            >+ Adicionar Postagem</button>
+            <span style={{ color: "#5a3a8a", fontSize: 11 }}>
+              Clique em qualquer célula para editar · 📋 duplicar · ✕ deletar · salvo automaticamente
+            </span>
+          </div>
+        </>
+      )}
 
       <div style={{
         marginTop: 36, textAlign: "center", color: "#3d1b69",
