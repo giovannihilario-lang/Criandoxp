@@ -35,6 +35,39 @@ const STATUS_COLORS: Record<Status, { bg: string; text: string; border: string; 
   "Cancelado":    { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626", rowBg: "rgba(58,26,26,0.22)" },
 };
 
+// ─── Urgência de data ──────────────────────────────────────────────────────
+function parseDateBR(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const [d, m, y] = dateStr.split("/");
+  if (!d || !m || !y) return null;
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  return isNaN(date.getTime()) ? null : date;
+}
+
+type Urgency = "hoje" | "amanha" | "em2" | "em3" | null;
+
+function getUrgency(dateStr: string, status: Status): Urgency {
+  if (status === "Publicado" || status === "Cancelado") return null;
+  const date = parseDateBR(dateStr);
+  if (!date) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  const diff = Math.round((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diff === 0) return "hoje";
+  if (diff === 1) return "amanha";
+  if (diff === 2) return "em2";
+  if (diff === 3) return "em3";
+  return null;
+}
+
+const URGENCY_STYLES: Record<NonNullable<Urgency>, { border: string; rowBg: string; badge: string; badgeBg: string; badgeColor: string; anim: string }> = {
+  hoje:   { border: "#ef4444", rowBg: "rgba(239,68,68,0.13)",  badge: "HOJE",   badgeBg: "#ef4444", badgeColor: "#fff",    anim: "pulse-red 1s ease-in-out infinite" },
+  amanha: { border: "#f59e0b", rowBg: "rgba(245,158,11,0.12)", badge: "AMANHÃ", badgeBg: "#f59e0b", badgeColor: "#1a0d3a", anim: "pulse-yellow 1.5s ease-in-out infinite" },
+  em2:    { border: "#fcd34d", rowBg: "rgba(252,211,77,0.08)", badge: "2 DIAS", badgeBg: "#fcd34d", badgeColor: "#1a0d3a", anim: "none" },
+  em3:    { border: "#6ee7b7", rowBg: "rgba(110,231,183,0.07)", badge: "3 DIAS", badgeBg: "#059669", badgeColor: "#fff",   anim: "none" },
+};
+
 interface Row {
   id: string;
   postagem: string;
@@ -81,10 +114,7 @@ const makeRow = (n: number, mes: number): Row => ({
 // ─── Supabase helpers ──────────────────────────────────────────────────────
 async function dbLoad(mes: number): Promise<Row[]> {
   const res = await fetch(`${TABLE}?mes=eq.${mes}&select=*`, {
-    headers: {
-      "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${SUPABASE_KEY}`,
-    },
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -93,10 +123,7 @@ async function dbLoad(mes: number): Promise<Row[]> {
 async function dbUpsert(row: Row): Promise<void> {
   const res = await fetch(`${TABLE}?on_conflict=id`, {
     method: "POST",
-    headers: {
-      ...HEADERS,
-      "Prefer": "resolution=merge-duplicates,return=minimal",
-    },
+    headers: { ...HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify(row),
   });
   if (!res.ok) throw new Error(await res.text());
@@ -119,9 +146,10 @@ interface EditableCellProps {
   options?: readonly string[];
   placeholder?: string;
   wide?: boolean;
+  urgency?: Urgency;
 }
 
-function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options, placeholder, wide }: EditableCellProps) {
+function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options, placeholder, wide, urgency }: EditableCellProps) {
   const [editing, setEditing] = useState(false);
 
   const handleFocus = () => { setEditing(true); onFocus?.(); };
@@ -130,11 +158,7 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
   if (type === "select") {
     const c = STATUS_COLORS[value as Status] ?? { bg: "#2d1b69", text: "#c9a0f5", border: "#6b3fa0" };
     return (
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        onFocus={onFocus}
-        onBlur={onBlur}
+      <select value={value} onChange={e => onChange(e.target.value)} onFocus={onFocus} onBlur={onBlur}
         style={{
           background: c.bg, color: c.text, border: `1px solid ${c.border}`,
           borderRadius: 6, padding: "4px 8px", fontSize: 12,
@@ -151,20 +175,14 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
         <img src={icon} alt={value || "rede"} style={{ width: 18, height: 18, objectFit: "contain", borderRadius: 3 }} />
-        <select
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          onFocus={onFocus}
-          onBlur={onBlur}
+        <select value={value} onChange={e => onChange(e.target.value)} onFocus={onFocus} onBlur={onBlur}
           style={{
             background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a",
             borderRadius: 6, padding: "4px 6px", fontSize: 12,
             fontFamily: "'Cinzel', serif", cursor: "pointer", flex: 1, outline: "none",
           }}>
           <option value="">--</option>
-          {options!.map(o => (
-            <option key={o} value={o}>{o}</option>
-          ))}
+          {options!.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       </div>
     );
@@ -172,11 +190,7 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
 
   if (type === "select-simple") {
     return (
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        onFocus={onFocus}
-        onBlur={onBlur}
+      <select value={value} onChange={e => onChange(e.target.value)} onFocus={onFocus} onBlur={onBlur}
         style={{
           background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a",
           borderRadius: 6, padding: "4px 6px", fontSize: 12,
@@ -188,14 +202,12 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
     );
   }
 
+  // Campo de data com badge de urgência
+  const us = urgency ? URGENCY_STYLES[urgency] : null;
+
   return editing ? (
-    <textarea
-      autoFocus
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      placeholder={placeholder}
+    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
+      onFocus={handleFocus} onBlur={handleBlur} placeholder={placeholder}
       style={{
         width: "100%", minHeight: wide ? 60 : 32,
         background: "#1a0d3a", color: "#e2d0ff",
@@ -206,9 +218,7 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
       }}
     />
   ) : (
-    <div
-      onClick={handleFocus}
-      title="Clique para editar"
+    <div onClick={handleFocus} title="Clique para editar"
       style={{
         minHeight: 28, padding: "4px 6px",
         color: value ? "#e2d0ff" : "#5a3a8a", fontSize: 12,
@@ -220,6 +230,15 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
     >
       {value || <span style={{ fontStyle: "italic", opacity: 0.4 }}>{placeholder ?? "—"}</span>}
+      {us && (
+        <span style={{
+          display: "inline-block", marginLeft: 6,
+          background: us.badgeBg, color: us.badgeColor,
+          fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel', serif",
+          borderRadius: 4, padding: "1px 5px", letterSpacing: 1,
+          animation: us.anim, verticalAlign: "middle",
+        }}>{us.badge}</span>
+      )}
     </div>
   );
 }
@@ -313,7 +332,6 @@ export default function App() {
     try { await dbUpsert(row); } catch { setSyncStatus("error"); }
   };
 
-  // ── Duplicar linha ──
   const duplicateRow = async (source: Row) => {
     const row: Row = {
       ...source,
@@ -342,6 +360,9 @@ export default function App() {
     (filterRede === "Todos" || r.rede === filterRede || r.rede === "Todos")
   );
 
+  // Contagem de alertas para exibir no header
+  const urgentCount = rows.filter(r => getUrgency(r.data, r.status) !== null).length;
+
   const selectStyle: React.CSSProperties = {
     background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a",
     borderRadius: 8, padding: "7px 12px", fontFamily: "'Cinzel', serif",
@@ -364,11 +385,13 @@ export default function App() {
         ::-webkit-scrollbar-track { background: #0d0720; }
         ::-webkit-scrollbar-thumb { background: #4a2a8a; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #7c3aed; }
-        @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-        @keyframes glow  { 0%,100%{box-shadow:0 0 20px #7c3aed44} 50%{box-shadow:0 0 40px #7c3aed88} }
-        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
-        @keyframes spin  { to{transform:rotate(360deg)} }
-        tr.status-row { transition: background 0.15s, box-shadow 0.15s; }
+        @keyframes float        { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+        @keyframes glow         { 0%,100%{box-shadow:0 0 20px #7c3aed44} 50%{box-shadow:0 0 40px #7c3aed88} }
+        @keyframes blink        { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes spin         { to{transform:rotate(360deg)} }
+        @keyframes pulse-red    { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.5)} 50%{box-shadow:0 0 0 4px rgba(239,68,68,0)} }
+        @keyframes pulse-yellow { 0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.5)} 50%{box-shadow:0 0 0 4px rgba(245,158,11,0)} }
+        tr.status-row { transition: background 0.15s; }
         tr.status-row:hover td { filter: brightness(1.15); }
       `}</style>
 
@@ -389,6 +412,15 @@ export default function App() {
           </div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          {urgentCount > 0 && (
+            <span style={{
+              background: "#ef4444", color: "#fff", borderRadius: 20,
+              padding: "4px 12px", fontSize: 11, fontFamily: "'Cinzel', serif", fontWeight: 700,
+              animation: "pulse-red 1s ease-in-out infinite", letterSpacing: 1,
+            }}>
+              ⚡ {urgentCount} post{urgentCount > 1 ? "s" : ""} urgente{urgentCount > 1 ? "s" : ""}
+            </span>
+          )}
           <span style={{ fontSize: 11, color: syncColor, animation: syncStatus === "saving" ? "blink 1s infinite" : "none" }}>
             {syncLabel}
           </span>
@@ -486,15 +518,19 @@ export default function App() {
               </tr>
             )}
             {filtered.map((row, idx) => {
+              const urgency = getUrgency(row.data, row.status);
+              const us = urgency ? URGENCY_STYLES[urgency] : null;
               const sc = STATUS_COLORS[row.status];
-              const baseBg = sc ? sc.rowBg : (idx % 2 === 0 ? "#110828" : "#0d0720");
+              // Urgência tem prioridade sobre cor de status
+              const baseBg  = us ? us.rowBg  : (sc ? sc.rowBg  : (idx % 2 === 0 ? "#110828" : "#0d0720"));
+              const baseBorder = us ? us.border : (sc ? sc.border : "transparent");
               return (
                 <tr
                   key={row.id}
                   className="status-row"
                   style={{
                     background: baseBg,
-                    borderLeft: sc ? `3px solid ${sc.border}` : "3px solid transparent",
+                    borderLeft: `3px solid ${baseBorder}`,
                     transition: "background 0.15s",
                   }}
                   onMouseEnter={e => (e.currentTarget.style.background = "#1e0f45")}
@@ -507,18 +543,12 @@ export default function App() {
                   }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
                       <span style={{ color: "#5a3a8a" }}>{idx + 1}</span>
-                      {/* Duplicar */}
-                      <button
-                        onClick={() => duplicateRow(row)}
-                        title="Duplicar"
+                      <button onClick={() => duplicateRow(row)} title="Duplicar"
                         style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }}
                         onMouseEnter={e => (e.currentTarget.style.color = "#c084fc")}
                         onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}
                       >📋</button>
-                      {/* Deletar */}
-                      <button
-                        onClick={() => removeRow(row.id)}
-                        title="Deletar"
+                      <button onClick={() => removeRow(row.id)} title="Deletar"
                         style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }}
                         onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
                         onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}
@@ -535,6 +565,7 @@ export default function App() {
                         onChange={val => updateRow(row.id, col.key, val)}
                         type={col.type} options={col.options}
                         placeholder={col.placeholder} wide={col.wide}
+                        urgency={col.key === "data" ? urgency : undefined}
                       />
                     </td>
                   ))}
