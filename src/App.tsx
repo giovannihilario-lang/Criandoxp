@@ -818,7 +818,7 @@ export default function App() {
                 <button onClick={addRow} style={{ background: "linear-gradient(135deg, #4a2a8a, #7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 24px", fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700, cursor: "pointer", letterSpacing: 1, transition: "all 0.2s", boxShadow: "0 4px 15px #7c3aed44" }}
                   onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 25px #7c3aed66"; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 15px #7c3aed44"; }}
-                >+ Adicionar Postagem!</button>
+                >+ Adicionar Postagem</button>
                 <span style={{ color: "#5a3a8a", fontSize: 11 }}>Clique em qualquer célula para editar · 📋 duplicar · ✕ deletar · salvo automaticamente</span>
               </div>
             </>
