@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
-// ─── Supabase config ───────────────────────────────────────────────────────
 const SUPABASE_URL = "https://zovgkatndrgzxocwpdjm.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvdmdrYXRuZHJnenhvY3dwZGptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MzY4MjEsImV4cCI6MjA5NTMxMjgyMX0.jm_BaUCN3CHPP9Rut2HM8KRVWes5nZLhJ_oyKbdqDXs";
 const HEADERS = {
@@ -11,7 +10,6 @@ const HEADERS = {
 };
 const TABLE = `${SUPABASE_URL}/rest/v1/postagens`;
 
-// ─── Types ─────────────────────────────────────────────────────────────────
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const WEEKDAYS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const STATUS_OPTIONS = ["Planejado","Em produção","Agendado","Publicado","Cancelado"] as const;
@@ -95,15 +93,15 @@ interface ColDef {
 }
 
 const COLS: ColDef[] = [
-  { key: "postagem",      label: "Postagem",       width: 90,  type: "text",          placeholder: "Postagem" },
-  { key: "data",          label: "📅 Data",         width: 140, type: "text",          placeholder: "dd/mm/aaaa" },
-  { key: "rede",          label: "🌐 Rede",          width: 120, type: "select-rede",   options: REDE_OPTIONS },
-  { key: "formato",       label: "🎞 Formato",       width: 110, type: "select-simple", options: FORMATO_OPTIONS },
-  { key: "tema",          label: "✨ Tema",           width: 160, type: "text",          placeholder: "Título / tema do post", wide: true },
-  { key: "briefing",      label: "📝 Briefing",      width: 240, type: "text",          placeholder: "Descrição, referências, copy...", wide: true },
-  { key: "responsavel",   label: "👤 Responsável",   width: 120, type: "text",          placeholder: "Nome" },
-  { key: "status",        label: "🔮 Status",        width: 130, type: "select",        options: STATUS_OPTIONS },
-  { key: "observacoes",   label: "💬 Obs",           width: 180, type: "text",          placeholder: "Notas extras...", wide: true },
+  { key: "postagem",    label: "Postagem",     width: 90,  type: "text",          placeholder: "Postagem" },
+  { key: "data",        label: "📅 Data",       width: 140, type: "text",          placeholder: "dd/mm/aaaa" },
+  { key: "rede",        label: "🌐 Rede",        width: 120, type: "select-rede",   options: REDE_OPTIONS },
+  { key: "formato",     label: "🎞 Formato",     width: 110, type: "select-simple", options: FORMATO_OPTIONS },
+  { key: "tema",        label: "✨ Tema",         width: 160, type: "text",          placeholder: "Título / tema do post", wide: true },
+  { key: "briefing",    label: "📝 Briefing",    width: 240, type: "text",          placeholder: "Descrição, referências, copy...", wide: true },
+  { key: "responsavel", label: "👤 Responsável", width: 120, type: "text",          placeholder: "Nome" },
+  { key: "status",      label: "🔮 Status",      width: 130, type: "select",        options: STATUS_OPTIONS },
+  { key: "observacoes", label: "💬 Obs",         width: 180, type: "text",          placeholder: "Notas extras...", wide: true },
 ];
 
 const makeRow = (n: number, mes: number): Row => ({
@@ -137,7 +135,6 @@ async function dbDelete(id: string): Promise<void> {
   });
 }
 
-// ─── EditableCell ──────────────────────────────────────────────────────────
 interface EditableCellProps {
   value: string;
   onChange: (val: string) => void;
@@ -165,10 +162,10 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
     );
   }
   if (type === "select-rede") {
-    const icon = REDE_ICONS[value] ?? REDE_ICONS["Todos"];
+    const icon = REDE_ICONS[value];
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-        <img src={icon} alt={value || "rede"} style={{ width: 18, height: 18, objectFit: "contain", borderRadius: 3 }} />
+        {icon && <img src={icon} alt={value} style={{ width: 18, height: 18, objectFit: "contain", borderRadius: 3 }} />}
         <select value={value} onChange={e => onChange(e.target.value)} onFocus={onFocus} onBlur={onBlur}
           style={{ background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 6, padding: "4px 6px", fontSize: 12, fontFamily: "'Cinzel', serif", cursor: "pointer", flex: 1, outline: "none" }}>
           <option value="">--</option>
@@ -198,14 +195,11 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
     >
       {value || <span style={{ fontStyle: "italic", opacity: 0.4 }}>{placeholder ?? "—"}</span>}
-      {us && (
-        <span style={{ display: "inline-block", marginLeft: 6, background: us.badgeBg, color: us.badgeColor, fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel', serif", borderRadius: 4, padding: "1px 5px", letterSpacing: 1, animation: us.anim, verticalAlign: "middle" }}>{us.badge}</span>
-      )}
+      {us && <span style={{ display: "inline-block", marginLeft: 6, background: us.badgeBg, color: us.badgeColor, fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel', serif", borderRadius: 4, padding: "1px 5px", letterSpacing: 1, animation: us.anim, verticalAlign: "middle" }}>{us.badge}</span>}
     </div>
   );
 }
 
-// ─── CalendarView ──────────────────────────────────────────────────────────
 function CalendarView({ rows, mes, onSelectDay }: { rows: Row[]; mes: number; onSelectDay: (rows: Row[], day: number) => void }) {
   const year = new Date().getFullYear();
   const firstDay = new Date(year, mes, 1).getDay();
@@ -270,7 +264,6 @@ function CalendarView({ rows, mes, onSelectDay }: { rows: Row[]; mes: number; on
   );
 }
 
-// ─── DayPanel ──────────────────────────────────────────────────────────────
 function DayPanel({ day, mes, rows, onClose }: { day: number; mes: number; rows: Row[]; onClose: () => void }) {
   return (
     <div style={{ marginTop: 16, background: "linear-gradient(135deg, #1a0d3a, #2d1b69)", border: "1px solid #4a2a8a", borderRadius: 14, padding: "18px 20px", animation: "glow 4s ease-in-out infinite" }}>
@@ -278,7 +271,7 @@ function DayPanel({ day, mes, rows, onClose }: { day: number; mes: number; rows:
         <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 700, color: "#c084fc", letterSpacing: 2 }}>
           📅 {day} de {MONTHS[mes]} — {rows.length} postagem{rows.length !== 1 ? "s" : ""}
         </div>
-        <button onClick={onClose} style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: "#5a3a8a", cursor: "pointer", padding: "4px 10px", fontFamily: "'Cinzel', serif", fontSize: 11, transition: "all 0.15s" }}
+        <button onClick={onClose} style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: "#5a3a8a", cursor: "pointer", padding: "4px 10px", fontFamily: "'Cinzel', serif", fontSize: 11 }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = "#4a2a8a"; e.currentTarget.style.color = "#5a3a8a"; }}
         >✕ Fechar</button>
@@ -322,24 +315,23 @@ function DayPanel({ day, mes, rows, onClose }: { day: number; mes: number; rows:
   );
 }
 
-// ─── Tráfego Pago Data ────────────────────────────────────────────────────
 const CAMPAIGNS = [
-  { id: 1, nome: "Tráfego — Anunciantes do Instagram", periodo: "11 abr → 15 abr 2026", vizTotal: 26259, vizUnicos: 24385, resultado: 307, tipoResultado: "cliques no link", investimento: null, best: false },
-  { id: 2, nome: "Post Mayou — 3ª rodada",             periodo: "9 mai → 13 mai 2026",   vizTotal: 17846, vizUnicos: 14477, resultado: 556, tipoResultado: "visitas à página", investimento: null, best: true  },
-  { id: 3, nome: "Post Gio 2 — 2ª rodada",             periodo: "14 mai → 17 mai 2026",  vizTotal: 13935, vizUnicos: 11389, resultado: 191, tipoResultado: "visitas à página", investimento: null, best: false },
-  { id: 4, nome: "Post Mayou — 1ª rodada",             periodo: "5 abr → 9 abr 2026",    vizTotal: 10537, vizUnicos: 8002,  resultado: 182, tipoResultado: "visitas à página", investimento: null, best: false },
-  { id: 5, nome: "Post Gio 3 — 3ª rodada",             periodo: "20 mai → 23 mai 2026",  vizTotal: 9341,  vizUnicos: 7902,  resultado: 134, tipoResultado: "visitas à página", investimento: null, best: false },
-  { id: 6, nome: "Post Gio 1 — 1ª rodada",             periodo: "21 abr → 24 abr 2026",  vizTotal: 7784,  vizUnicos: 6557,  resultado: 96,  tipoResultado: "visitas à página", investimento: null, best: false },
-  { id: 7, nome: "Post Mayou — 2ª rodada",             periodo: "26 abr → 30 abr 2026",  vizTotal: 1049,  vizUnicos: 951,   resultado: 9,   tipoResultado: "visitas à página", investimento: null, best: false },
+  { id: 1, nome: "Tráfego — Anunciantes do Instagram", periodo: "11 abr → 15 abr 2026", vizTotal: 26259, vizUnicos: 24385, resultado: 307, tipoResultado: "cliques no link",   best: false },
+  { id: 2, nome: "Post Mayou — 3ª rodada",             periodo: "9 mai → 13 mai 2026",   vizTotal: 17846, vizUnicos: 14477, resultado: 556, tipoResultado: "visitas à página",  best: true  },
+  { id: 3, nome: "Post Gio 2 — 2ª rodada",             periodo: "14 mai → 17 mai 2026",  vizTotal: 13935, vizUnicos: 11389, resultado: 191, tipoResultado: "visitas à página",  best: false },
+  { id: 4, nome: "Post Mayou — 1ª rodada",             periodo: "5 abr → 9 abr 2026",    vizTotal: 10537, vizUnicos: 8002,  resultado: 182, tipoResultado: "visitas à página",  best: false },
+  { id: 5, nome: "Post Gio 3 — 3ª rodada",             periodo: "20 mai → 23 mai 2026",  vizTotal: 9341,  vizUnicos: 7902,  resultado: 134, tipoResultado: "visitas à página",  best: false },
+  { id: 6, nome: "Post Gio 1 — 1ª rodada",             periodo: "21 abr → 24 abr 2026",  vizTotal: 7784,  vizUnicos: 6557,  resultado: 96,  tipoResultado: "visitas à página",  best: false },
+  { id: 7, nome: "Post Mayou — 2ª rodada",             periodo: "26 abr → 30 abr 2026",  vizTotal: 1049,  vizUnicos: 951,   resultado: 9,   tipoResultado: "visitas à página",  best: false },
 ];
 
 const AUDIENCE_DATA = [
-  { faixa: "18–24", homens: 20, mulheres: 2,  total: 22 },
-  { faixa: "25–34", homens: 40, mulheres: 5,  total: 45 },
-  { faixa: "35–44", homens: 22, mulheres: 2,  total: 24 },
-  { faixa: "45–54", homens: 7,  mulheres: 1,  total: 8  },
-  { faixa: "55–64", homens: 1,  mulheres: 0.5,total: 1  },
-  { faixa: "65+",   homens: 1,  mulheres: 0,  total: 1  },
+  { faixa: "18–24", homens: 20, mulheres: 2,   total: 22 },
+  { faixa: "25–34", homens: 40, mulheres: 5,   total: 45 },
+  { faixa: "35–44", homens: 22, mulheres: 2,   total: 24 },
+  { faixa: "45–54", homens: 7,  mulheres: 1,   total: 8  },
+  { faixa: "55–64", homens: 1,  mulheres: 0.5, total: 1  },
+  { faixa: "65+",   homens: 1,  mulheres: 0,   total: 1  },
 ];
 
 const CHART_DATA = CAMPAIGNS.map(c => ({
@@ -351,27 +343,11 @@ const CHART_DATA = CAMPAIGNS.map(c => ({
 
 const fmtNum = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
 
-// ─── TrafegoView ──────────────────────────────────────────────────────────
 function TrafegoView() {
   const totalViz    = CAMPAIGNS.reduce((s, c) => s + c.vizTotal, 0);
   const totalUnicos = CAMPAIGNS.reduce((s, c) => s + c.vizUnicos, 0);
   const totalInter  = 14300;
-  const totalVisitas= 1832;
-
-  const mysticCard = (children: React.ReactNode, extra?: React.CSSProperties) => (
-    <div style={{
-      background: "linear-gradient(135deg, #1a0d3a 0%, #110828 100%)",
-      border: "1px solid #4a2a8a",
-      borderRadius: 14,
-      padding: "20px 22px",
-      animation: "glow 4s ease-in-out infinite",
-      ...extra,
-    }}>{children}</div>
-  );
-
-  const sectionLabel = (text: string) => (
-    <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, letterSpacing: 3, textTransform: "uppercase", color: "#5a3a8a", marginBottom: 16 }}>{text}</div>
-  );
+  const totalVisitas = 1832;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -389,137 +365,102 @@ function TrafegoView() {
 
   return (
     <div>
-      {/* KPIs */}
-      <div style={{ marginBottom: 28 }}>
-        {sectionLabel("✦ Visão Geral — 90 dias · 7 campanhas")}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-          {[
-            { label: "Visualizações", val: fmtNum(totalViz),    sub: "impressões totais",   color: "#c084fc" },
-            { label: "Alcance",       val: fmtNum(totalUnicos), sub: "pessoas únicas",       color: "#a78bfa" },
-            { label: "Interações",    val: fmtNum(totalInter),  sub: "curtidas, comentários", color: "#e879f9" },
-            { label: "Visitas",       val: fmtNum(totalVisitas),sub: "acessos gerados",      color: "#6ee7b7" },
-          ].map(k => (
-            <div key={k.label} style={{
-              background: "linear-gradient(135deg, #1a0d3a, #110828)",
-              border: `1px solid #4a2a8a`,
-              borderTop: `2px solid ${k.color}`,
-              borderRadius: 12, padding: "18px 20px",
-              animation: "glow 3s ease-in-out infinite",
-            }}>
-              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#a78bfa", marginBottom: 8, letterSpacing: 1 }}>{k.label}</div>
-              <div style={{ fontSize: 30, fontWeight: 900, color: k.color, fontFamily: "'Cinzel', serif", letterSpacing: -1 }}>{k.val}</div>
-              <div style={{ fontSize: 10, color: "#9d8bbf", marginTop: 4, fontFamily: "'Lato', sans-serif" }}>{k.sub}</div>
-            </div>
-          ))}
-        </div>
+      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, letterSpacing: 3, textTransform: "uppercase", color: "#5a3a8a", marginBottom: 16 }}>✦ Visão Geral — 90 dias · 7 campanhas</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 28 }}>
+        {[
+          { label: "Visualizações", val: fmtNum(totalViz),    sub: "impressões totais",    color: "#c084fc" },
+          { label: "Alcance",       val: fmtNum(totalUnicos), sub: "pessoas únicas",        color: "#a78bfa" },
+          { label: "Interações",    val: fmtNum(totalInter),  sub: "curtidas, comentários", color: "#e879f9" },
+          { label: "Visitas",       val: fmtNum(totalVisitas),sub: "acessos gerados",       color: "#6ee7b7" },
+        ].map(k => (
+          <div key={k.label} style={{ background: "linear-gradient(135deg, #1a0d3a, #110828)", border: "1px solid #4a2a8a", borderTop: `2px solid ${k.color}`, borderRadius: 12, padding: "18px 20px", animation: "glow 3s ease-in-out infinite" }}>
+            <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#a78bfa", marginBottom: 8, letterSpacing: 1 }}>{k.label}</div>
+            <div style={{ fontSize: 30, fontWeight: 900, color: k.color, fontFamily: "'Cinzel', serif", letterSpacing: -1 }}>{k.val}</div>
+            <div style={{ fontSize: 10, color: "#9d8bbf", marginTop: 4, fontFamily: "'Lato', sans-serif" }}>{k.sub}</div>
+          </div>
+        ))}
       </div>
 
-      {/* Charts row */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16, marginBottom: 28 }}>
-        {/* Bar chart */}
-        {mysticCard(
-          <>
-            <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c084fc", marginBottom: 16, letterSpacing: 1 }}>✦ Visualizações por Campanha</div>
-            <div style={{ height: 220 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={CHART_DATA} margin={{ top: 4, right: 4, bottom: 40, left: 0 }}>
-                  <XAxis dataKey="name" tick={{ fill: "#5a3a8a", fontSize: 9, fontFamily: "'Lato', sans-serif" }} angle={-30} textAnchor="end" interval={0} />
-                  <YAxis tick={{ fill: "#5a3a8a", fontSize: 9, fontFamily: "'Lato', sans-serif" }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+"k" : v} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="vizTotal" name="Visualizações" radius={[4,4,0,0]}>
-                    {CHART_DATA.map((_, i) => <Cell key={i} fill={`rgba(162,89,255,${0.85 - i*0.08})`} />)}
-                  </Bar>
-                  <Bar dataKey="vizUnicos" name="Visualizadores" radius={[4,4,0,0]}>
-                    {CHART_DATA.map((_, i) => <Cell key={i} fill={`rgba(192,132,252,${0.5 - i*0.04})`} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </>
-        )}
+        <div style={{ background: "linear-gradient(135deg, #1a0d3a, #110828)", border: "1px solid #4a2a8a", borderRadius: 14, padding: "20px 22px", animation: "glow 4s ease-in-out infinite" }}>
+          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c084fc", marginBottom: 16, letterSpacing: 1 }}>✦ Visualizações por Campanha</div>
+          <div style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={CHART_DATA} margin={{ top: 4, right: 4, bottom: 40, left: 0 }}>
+                <XAxis dataKey="name" tick={{ fill: "#5a3a8a", fontSize: 9, fontFamily: "'Lato', sans-serif" }} angle={-30} textAnchor="end" interval={0} />
+                <YAxis tick={{ fill: "#5a3a8a", fontSize: 9, fontFamily: "'Lato', sans-serif" }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+"k" : v} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="vizTotal" name="Visualizações" radius={[4,4,0,0]}>
+                  {CHART_DATA.map((_, i) => <Cell key={i} fill={`rgba(162,89,255,${0.85 - i*0.08})`} />)}
+                </Bar>
+                <Bar dataKey="vizUnicos" name="Visualizadores" radius={[4,4,0,0]}>
+                  {CHART_DATA.map((_, i) => <Cell key={i} fill={`rgba(192,132,252,${0.5 - i*0.04})`} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
 
-        {/* Audience */}
-        {mysticCard(
-          <>
-            <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c084fc", marginBottom: 4, letterSpacing: 1 }}>✦ Público — 30 dias</div>
-            <div style={{ fontSize: 10, color: "#5a3a8a", fontFamily: "'Lato', sans-serif", marginBottom: 16 }}>8,1 mil interações</div>
-            {AUDIENCE_DATA.map(a => (
-              <div key={a.faixa} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a", width: 38, flexShrink: 0 }}>{a.faixa}</div>
-                <div style={{ flex: 1, height: 18, background: "#0d0720", borderRadius: 4, overflow: "hidden", display: "flex" }}>
-                  <div style={{ width: `${a.homens}%`, background: "rgba(162,89,255,0.8)", height: "100%", borderRadius: "4px 0 0 4px" }} />
-                  <div style={{ width: `${a.mulheres}%`, background: "rgba(240,171,252,0.65)", height: "100%" }} />
-                </div>
-                <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 10, color: "#5a3a8a", width: 28, textAlign: "right" }}>{a.total}%</div>
+        <div style={{ background: "linear-gradient(135deg, #1a0d3a, #110828)", border: "1px solid #4a2a8a", borderRadius: 14, padding: "20px 22px", animation: "glow 4s ease-in-out infinite" }}>
+          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c084fc", marginBottom: 4, letterSpacing: 1 }}>✦ Público — 30 dias</div>
+          <div style={{ fontSize: 10, color: "#5a3a8a", fontFamily: "'Lato', sans-serif", marginBottom: 16 }}>8,1 mil interações</div>
+          {AUDIENCE_DATA.map(a => (
+            <div key={a.faixa} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a", width: 38, flexShrink: 0 }}>{a.faixa}</div>
+              <div style={{ flex: 1, height: 18, background: "#0d0720", borderRadius: 4, overflow: "hidden", display: "flex" }}>
+                <div style={{ width: `${a.homens}%`, background: "rgba(162,89,255,0.8)", height: "100%", borderRadius: "4px 0 0 4px" }} />
+                <div style={{ width: `${a.mulheres}%`, background: "rgba(240,171,252,0.65)", height: "100%" }} />
+              </div>
+              <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 10, color: "#5a3a8a", width: 28, textAlign: "right" }}>{a.total}%</div>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 14, marginTop: 12 }}>
+            {[["rgba(162,89,255,0.8)","Homens"],["rgba(240,171,252,0.65)","Mulheres"]].map(([bg, label]) => (
+              <div key={label as string} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <div style={{ width: 10, height: 10, borderRadius: 2, background: bg as string }} />
+                <span style={{ fontSize: 10, color: "#5a3a8a", fontFamily: "'Lato', sans-serif" }}>{label}</span>
               </div>
             ))}
-            <div style={{ display: "flex", gap: 14, marginTop: 12 }}>
-              {[["rgba(162,89,255,0.8)","Homens"],["rgba(240,171,252,0.65)","Mulheres"]].map(([bg, label]) => (
-                <div key={label as string} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: 2, background: bg as string }} />
-                  <span style={{ fontSize: 10, color: "#5a3a8a", fontFamily: "'Lato', sans-serif" }}>{label}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Campaigns */}
-      <div>
-        {sectionLabel("✦ Campanhas Individuais")}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
-          {CAMPAIGNS.map((c, idx) => (
-            <div key={c.id} style={{
-              background: "linear-gradient(135deg, #1a0d3a, #110828)",
-              border: c.best ? "1px solid rgba(162,89,255,0.5)" : "1px solid #2d1b69",
-              borderRadius: 12, padding: "18px 20px",
-              position: "relative",
-              transition: "border-color 0.2s",
-            }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = "#4a2a8a")}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = c.best ? "rgba(162,89,255,0.5)" : "#2d1b69")}
-            >
-              {c.best && (
-                <div style={{
-                  position: "absolute", top: 12, right: 12,
-                  background: "rgba(162,89,255,0.15)", border: "1px solid rgba(162,89,255,0.4)",
-                  color: "#c084fc", fontFamily: "'Cinzel', serif", fontSize: 8,
-                  letterSpacing: 1, textTransform: "uppercase", padding: "3px 9px", borderRadius: 20,
-                }}>✦ Mais visitas</div>
-              )}
-              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#5a3a8a", marginBottom: 6, letterSpacing: 1 }}>Campanha {String(idx + 1).padStart(2, "0")}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#e2d0ff", marginBottom: 3, lineHeight: 1.3, paddingRight: c.best ? 70 : 0, fontFamily: "'Cinzel', serif" }}>{c.nome}</div>
-              <div style={{ fontSize: 10, color: "#5a3a8a", marginBottom: 14, fontFamily: "'Lato', sans-serif" }}>{c.periodo}</div>
-              <div style={{ borderTop: "1px solid #2d1b69", paddingTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div>
-                  <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 3 }}>VISUALIZAÇÕES</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "#e2d0ff" }}>{c.vizTotal.toLocaleString("pt-BR")}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 3 }}>VISUALIZADORES</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "#e2d0ff" }}>{c.vizUnicos.toLocaleString("pt-BR")}</div>
-                </div>
-                <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #2d1b69", paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 3 }}>RESULTADO</div>
-                    <div style={{ fontSize: 22, fontWeight: 900, color: "#c084fc", fontFamily: "'Cinzel', serif" }}>{c.resultado}</div>
-                    <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Lato', sans-serif" }}>{c.tipoResultado}</div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 3 }}>TAXA</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa", fontFamily: "'Cinzel', serif" }}>
-                      {((c.resultado / c.vizTotal) * 100).toFixed(2)}%
-                    </div>
-                    <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Lato', sans-serif" }}>conversão</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+          </div>
         </div>
       </div>
 
+      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, letterSpacing: 3, textTransform: "uppercase", color: "#5a3a8a", marginBottom: 16 }}>✦ Campanhas Individuais</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+        {CAMPAIGNS.map((c, idx) => (
+          <div key={c.id} style={{ background: "linear-gradient(135deg, #1a0d3a, #110828)", border: c.best ? "1px solid rgba(162,89,255,0.5)" : "1px solid #2d1b69", borderRadius: 12, padding: "18px 20px", position: "relative", transition: "border-color 0.2s" }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = "#4a2a8a")}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = c.best ? "rgba(162,89,255,0.5)" : "#2d1b69")}
+          >
+            {c.best && <div style={{ position: "absolute", top: 12, right: 12, background: "rgba(162,89,255,0.15)", border: "1px solid rgba(162,89,255,0.4)", color: "#c084fc", fontFamily: "'Cinzel', serif", fontSize: 8, letterSpacing: 1, textTransform: "uppercase", padding: "3px 9px", borderRadius: 20 }}>✦ Mais visitas</div>}
+            <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#5a3a8a", marginBottom: 6, letterSpacing: 1 }}>Campanha {String(idx + 1).padStart(2, "0")}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#e2d0ff", marginBottom: 3, lineHeight: 1.3, paddingRight: c.best ? 70 : 0, fontFamily: "'Cinzel', serif" }}>{c.nome}</div>
+            <div style={{ fontSize: 10, color: "#5a3a8a", marginBottom: 14, fontFamily: "'Lato', sans-serif" }}>{c.periodo}</div>
+            <div style={{ borderTop: "1px solid #2d1b69", paddingTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 3 }}>VISUALIZAÇÕES</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "#e2d0ff" }}>{c.vizTotal.toLocaleString("pt-BR")}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 3 }}>VISUALIZADORES</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "#e2d0ff" }}>{c.vizUnicos.toLocaleString("pt-BR")}</div>
+              </div>
+              <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #2d1b69", paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 3 }}>RESULTADO</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: "#c084fc", fontFamily: "'Cinzel', serif" }}>{c.resultado}</div>
+                  <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Lato', sans-serif" }}>{c.tipoResultado}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 3 }}>TAXA</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa", fontFamily: "'Cinzel', serif" }}>{((c.resultado / c.vizTotal) * 100).toFixed(2)}%</div>
+                  <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Lato', sans-serif" }}>conversão</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
       <div style={{ marginTop: 32, textAlign: "center", color: "#3d1b69", fontSize: 10, fontFamily: "'Cinzel', serif", letterSpacing: 2 }}>
         Gerado em 24/05/2026 · Meta Ads Manager · 7 Campanhas
       </div>
@@ -529,15 +470,18 @@ function TrafegoView() {
 
 // ─── App ───────────────────────────────────────────────────────────────────
 export default function App() {
-  const [rows, setRows]             = useState<Row[]>([]);
-  const [mes, setMes]               = useState(new Date().getMonth());
-  const [filter, setFilter]         = useState("Todos");
-  const [filterRede, setFilterRede] = useState("Todos");
-  const [loading, setLoading]       = useState(true);
-  const [syncStatus, setSyncStatus] = useState<"ok" | "saving" | "error">("ok");
-  const [viewMode, setViewMode]     = useState<ViewMode>("tabela");
+  const [rows, setRows]               = useState<Row[]>([]);
+  const [mes, setMes]                 = useState(new Date().getMonth());
+  const [filter, setFilter]           = useState("Todos");
+  const [filterRede, setFilterRede]   = useState("Todos");
+  // ── NOVOS: filtros de data ──
+  const [filterDataInicio, setFilterDataInicio] = useState("");
+  const [filterDataFim, setFilterDataFim]       = useState("");
+  const [loading, setLoading]         = useState(true);
+  const [syncStatus, setSyncStatus]   = useState<"ok" | "saving" | "error">("ok");
+  const [viewMode, setViewMode]       = useState<ViewMode>("tabela");
   const [selectedDay, setSelectedDay] = useState<{ day: number; rows: Row[] } | null>(null);
-  const [appTab, setAppTab]         = useState<AppTab>("calendario");
+  const [appTab, setAppTab]           = useState<AppTab>("calendario");
 
   const pendingUpserts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const rowsRef = useRef<Row[]>([]);
@@ -617,11 +561,29 @@ export default function App() {
     try { await dbDelete(id); } catch { setSyncStatus("error"); }
   };
 
-  const filtered = rows.filter(r =>
-    (filter === "Todos" || r.status === filter) &&
-    (filterRede === "Todos" || r.rede === filterRede || r.rede === "Todos")
-  );
+  // ── FILTRO + ORDENAÇÃO POR DATA ──────────────────────────────────────────
+  const dInicio = parseDateBR(filterDataInicio);
+  const dFim    = parseDateBR(filterDataFim);
 
+  const filtered = rows
+    .filter(r => {
+      if (filter !== "Todos" && r.status !== filter) return false;
+      if (filterRede !== "Todos" && r.rede !== filterRede && r.rede !== "Todos") return false;
+      const d = parseDateBR(r.data);
+      if (dInicio && (!d || d < dInicio)) return false;
+      if (dFim    && (!d || d > dFim))   return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const da = parseDateBR(a.data);
+      const db = parseDateBR(b.data);
+      if (!da && !db) return 0;
+      if (!da) return 1;   // sem data vai pro final
+      if (!db) return -1;
+      return da.getTime() - db.getTime();
+    });
+
+  const temFiltroData = filterDataInicio !== "" || filterDataFim !== "";
   const urgentCount = rows.filter(r => getUrgency(r.data, r.status) !== null).length;
   const syncLabel = syncStatus === "saving" ? "Salvando..." : syncStatus === "error" ? "⚠ Erro de conexão" : "✓ Sincronizado";
   const syncColor = syncStatus === "saving" ? "#c084fc" : syncStatus === "error" ? "#f87171" : "#6ee7b7";
@@ -630,6 +592,12 @@ export default function App() {
     background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a",
     borderRadius: 8, padding: "7px 12px", fontFamily: "'Cinzel', serif",
     fontSize: 12, cursor: "pointer", outline: "none",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a",
+    borderRadius: 8, padding: "7px 12px", fontFamily: "'Cinzel', serif",
+    fontSize: 12, outline: "none", width: 148,
   };
 
   const handleSelectDay = (dayRows: Row[], day: number) => {
@@ -651,8 +619,7 @@ export default function App() {
         @keyframes spin         { to{transform:rotate(360deg)} }
         @keyframes pulse-red    { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.5)} 50%{box-shadow:0 0 0 4px rgba(239,68,68,0)} }
         @keyframes pulse-yellow { 0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.5)} 50%{box-shadow:0 0 0 4px rgba(245,158,11,0)} }
-        tr.status-row { transition: background 0.15s; }
-        tr.status-row:hover td { filter: brightness(1.15); }
+        input::placeholder { color: #5a3a8a; }
       `}</style>
 
       {/* HEADER */}
@@ -676,25 +643,17 @@ export default function App() {
               <span style={{ fontSize: 10, color: "#3d1b69" }}>• atualiza a cada 15s</span>
             </>
           )}
-
-          {/* APP TAB TOGGLE */}
           <div style={{ display: "flex", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, overflow: "hidden" }}>
             {([["calendario","📅 Calendário"],["trafego","📊 Tráfego Pago"]] as [AppTab, string][]).map(([tab, label]) => (
               <button key={tab} onClick={() => setAppTab(tab)}
-                style={{
-                  background: appTab === tab ? "linear-gradient(135deg, #4a2a8a, #7c3aed)" : "transparent",
-                  color: appTab === tab ? "#fff" : "#5a3a8a",
-                  border: "none", padding: "8px 18px",
-                  fontFamily: "'Cinzel', serif", fontSize: 11, fontWeight: 700,
-                  cursor: "pointer", letterSpacing: 1, transition: "all 0.2s",
-                }}
-              >{label}</button>
+                style={{ background: appTab === tab ? "linear-gradient(135deg, #4a2a8a, #7c3aed)" : "transparent", color: appTab === tab ? "#fff" : "#5a3a8a", border: "none", padding: "8px 18px", fontFamily: "'Cinzel', serif", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: 1, transition: "all 0.2s" }}>
+                {label}
+              </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* ── CALENDÁRIO TAB ── */}
       {appTab === "calendario" && (
         <>
           {/* FILTERS */}
@@ -710,11 +669,40 @@ export default function App() {
               <option value="Todos">Todos os Status</option>
               {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
             </select>
+
+            {/* ── FILTRO DE DATA ── */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, padding: "4px 10px" }}>
+              <span style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a", whiteSpace: "nowrap" }}>📅 De</span>
+              <input
+                type="text"
+                value={filterDataInicio}
+                onChange={e => setFilterDataInicio(e.target.value)}
+                placeholder="dd/mm/aaaa"
+                style={{ ...inputStyle, width: 110, background: "transparent", border: "none", padding: "4px 4px" }}
+              />
+              <span style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a" }}>até</span>
+              <input
+                type="text"
+                value={filterDataFim}
+                onChange={e => setFilterDataFim(e.target.value)}
+                placeholder="dd/mm/aaaa"
+                style={{ ...inputStyle, width: 110, background: "transparent", border: "none", padding: "4px 4px" }}
+              />
+              {temFiltroData && (
+                <button onClick={() => { setFilterDataInicio(""); setFilterDataFim(""); }}
+                  style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 14, padding: "0 2px", lineHeight: 1 }}
+                  title="Limpar filtro de data"
+                  onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
+                  onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}
+                >✕</button>
+              )}
+            </div>
+
             <button onClick={() => loadRows(mes)} style={{ background: "#1a0d3a", color: "#c084fc", border: "1px solid #4a2a8a", borderRadius: 8, padding: "7px 14px", fontFamily: "'Cinzel', serif", fontSize: 11, cursor: "pointer" }}>⟳ Atualizar</button>
             <div style={{ marginLeft: "auto", display: "flex", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, overflow: "hidden" }}>
-              {(["tabela", "calendario"] as ViewMode[]).map(mode => (
+              {(["tabela","calendario"] as ViewMode[]).map(mode => (
                 <button key={mode} onClick={() => { setViewMode(mode); setSelectedDay(null); }}
-                  style={{ background: viewMode === mode ? "linear-gradient(135deg, #4a2a8a, #7c3aed)" : "transparent", color: viewMode === mode ? "#fff" : "#5a3a8a", border: "none", padding: "7px 16px", fontFamily: "'Cinzel', serif", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: 1, transition: "all 0.2s", display: "flex", alignItems: "center", gap: 6 }}>
+                  style={{ background: viewMode === mode ? "linear-gradient(135deg, #4a2a8a, #7c3aed)" : "transparent", color: viewMode === mode ? "#fff" : "#5a3a8a", border: "none", padding: "7px 16px", fontFamily: "'Cinzel', serif", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: 1, transition: "all 0.2s" }}>
                   {mode === "tabela" ? "≡ Tabela" : "🗓 Calendário"}
                 </button>
               ))}
@@ -736,17 +724,19 @@ export default function App() {
               <span style={{ fontSize: 20, fontWeight: 900, color: "#c084fc", fontFamily: "'Cinzel', serif" }}>{rows.length}</span>
               <span style={{ fontSize: 10, color: "#c084fc", opacity: 0.8 }}>Total</span>
             </div>
+            {temFiltroData && (
+              <div style={{ background: "#1e0f45", border: "1px solid #7c3aed", borderRadius: 10, padding: "8px 16px", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 80 }}>
+                <span style={{ fontSize: 20, fontWeight: 900, color: "#c084fc", fontFamily: "'Cinzel', serif" }}>{filtered.length}</span>
+                <span style={{ fontSize: 10, color: "#c084fc", opacity: 0.8 }}>Filtradas</span>
+              </div>
+            )}
           </div>
 
           {/* CALENDAR VIEW */}
           {viewMode === "calendario" && (
             <div>
               <div style={{ borderRadius: 16, border: "1px solid #4a2a8a", animation: "glow 4s ease-in-out infinite", padding: "16px", background: "#0d072088", position: "relative" }}>
-                {loading && (
-                  <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}>
-                    <div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                  </div>
-                )}
+                {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
                 <CalendarView rows={filtered} mes={mes} onSelectDay={handleSelectDay} />
               </div>
               {selectedDay && <DayPanel day={selectedDay.day} mes={mes} rows={selectedDay.rows} onClose={() => setSelectedDay(null)} />}
@@ -764,11 +754,7 @@ export default function App() {
           {viewMode === "tabela" && (
             <>
               <div style={{ overflowX: "auto", borderRadius: 16, border: "1px solid #4a2a8a", animation: "glow 4s ease-in-out infinite", position: "relative" }}>
-                {loading && (
-                  <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}>
-                    <div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                  </div>
-                )}
+                {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
                 <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900 }}>
                   <thead>
                     <tr style={{ background: "linear-gradient(90deg, #2d1b69, #3d1b8a, #2d1b69)" }}>
@@ -791,14 +777,14 @@ export default function App() {
                       const baseBg = us ? us.rowBg : (sc ? sc.rowBg : (idx % 2 === 0 ? "#110828" : "#0d0720"));
                       const baseBorder = us ? us.border : (sc ? sc.border : "transparent");
                       return (
-                        <tr key={row.id} className="status-row"
+                        <tr key={row.id}
                           style={{ background: baseBg, borderLeft: `3px solid ${baseBorder}`, transition: "background 0.15s" }}
                           onMouseEnter={e => (e.currentTarget.style.background = "#1e0f45")}
                           onMouseLeave={e => (e.currentTarget.style.background = baseBg)}
                         >
                           <td style={{ padding: "6px 4px", textAlign: "center", borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45", fontSize: 10, color: "#5a3a8a" }}>
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                              <span style={{ color: "#5a3a8a" }}>{idx + 1}</span>
+                              <span>{idx + 1}</span>
                               <button onClick={() => duplicateRow(row)} title="Duplicar" style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }} onMouseEnter={e => (e.currentTarget.style.color = "#c084fc")} onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}>📋</button>
                               <button onClick={() => removeRow(row.id)} title="Deletar" style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }} onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")} onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}>✕</button>
                             </div>
@@ -819,18 +805,17 @@ export default function App() {
                   onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 25px #7c3aed66"; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 15px #7c3aed44"; }}
                 >+ Adicionar Postagem</button>
-                <span style={{ color: "#5a3a8a", fontSize: 11 }}>Clique em qualquer célula para editar · 📋 duplicar · ✕ deletar · salvo automaticamente</span>
+                <span style={{ color: "#5a3a8a", fontSize: 11 }}>Clique em qualquer célula para editar · 📋 duplicar · ✕ deletar · ordenado por data</span>
               </div>
             </>
           )}
         </>
       )}
 
-      {/* ── TRÁFEGO TAB ── */}
       {appTab === "trafego" && <TrafegoView />}
 
       <div style={{ marginTop: 36, textAlign: "center", color: "#3d1b69", fontSize: 10, fontFamily: "'Cinzel', serif", letterSpacing: 2 }}>
-        <img src="/icons/criandoxp.png" alt="Criando XP" style={{ width: 16, height: 16, objectFit: "contain", verticalAlign: "middle", marginRight: 4 }} />
+        <img src="/icons/criandoxp.png" alt="" style={{ width: 16, height: 16, objectFit: "contain", verticalAlign: "middle", marginRight: 4 }} />
         CRIANDO XP · {appTab === "calendario" ? `CALENDÁRIO DE CONTEÚDO · ${MONTHS[mes].toUpperCase()}` : "TRÁFEGO PAGO · META ADS"}
       </div>
     </div>
