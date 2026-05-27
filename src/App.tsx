@@ -7,7 +7,6 @@ const HEADERS = {
   "Content-Type": "application/json",
   "apikey": SUPABASE_KEY,
   "Authorization": `Bearer ${SUPABASE_KEY}`,
-  "Prefer": "resolution=merge-duplicates,return=representation",
 };
 const TABLE = `${SUPABASE_URL}/rest/v1/postagens`;
 
@@ -52,14 +51,14 @@ interface ColDef {
 
 const COLS: ColDef[] = [
   { key: "postagem",      label: "Postagem",       width: 90,  type: "text",          placeholder: "Postagem" },
-  { key: "data",        label: "📅 Data",       width: 110, type: "text",          placeholder: "dd/mm/aaaa" },
-  { key: "rede",        label: "🌐 Rede",        width: 110, type: "select-simple", options: REDE_OPTIONS },
-  { key: "formato",     label: "🎞 Formato",     width: 110, type: "select-simple", options: FORMATO_OPTIONS },
-  { key: "tema",        label: "✨ Tema",         width: 160, type: "text",          placeholder: "Título / tema do post", wide: true },
-  { key: "briefing",    label: "📝 Briefing",    width: 240, type: "text",          placeholder: "Descrição, referências, copy...", wide: true },
-  { key: "responsavel", label: "👤 Responsável", width: 120, type: "text",          placeholder: "Nome" },
-  { key: "status",      label: "🔮 Status",      width: 130, type: "select",        options: STATUS_OPTIONS },
-  { key: "observacoes", label: "💬 Obs",         width: 180, type: "text",          placeholder: "Notas extras...", wide: true },
+  { key: "data",          label: "📅 Data",         width: 110, type: "text",          placeholder: "dd/mm/aaaa" },
+  { key: "rede",          label: "🌐 Rede",          width: 110, type: "select-simple", options: REDE_OPTIONS },
+  { key: "formato",       label: "🎞 Formato",       width: 110, type: "select-simple", options: FORMATO_OPTIONS },
+  { key: "tema",          label: "✨ Tema",           width: 160, type: "text",          placeholder: "Título / tema do post", wide: true },
+  { key: "briefing",      label: "📝 Briefing",      width: 240, type: "text",          placeholder: "Descrição, referências, copy...", wide: true },
+  { key: "responsavel",   label: "👤 Responsável",   width: 120, type: "text",          placeholder: "Nome" },
+  { key: "status",        label: "🔮 Status",        width: 130, type: "select",        options: STATUS_OPTIONS },
+  { key: "observacoes",   label: "💬 Obs",           width: 180, type: "text",          placeholder: "Notas extras...", wide: true },
 ];
 
 const makeRow = (n: number, mes: number): Row => ({
@@ -71,7 +70,7 @@ const makeRow = (n: number, mes: number): Row => ({
 
 // ─── Supabase helpers ──────────────────────────────────────────────────────
 async function dbLoad(mes: number): Promise<Row[]> {
-  const res = await fetch(`${TABLE}?mes=eq.${mes}&select=*&order=created_at.asc`, {
+  const res = await fetch(`${TABLE}?mes=eq.${mes}&select=*`, {
     headers: {
       "apikey": SUPABASE_KEY,
       "Authorization": `Bearer ${SUPABASE_KEY}`,
@@ -82,42 +81,63 @@ async function dbLoad(mes: number): Promise<Row[]> {
 }
 
 async function dbUpsert(row: Row): Promise<void> {
-  await fetch(`${TABLE}?on_conflict=id`, {
+  const res = await fetch(`${TABLE}?on_conflict=id`, {
     method: "POST",
     headers: {
       ...HEADERS,
-      "Prefer": "resolution=merge-duplicates",
+      "Prefer": "resolution=merge-duplicates,return=minimal",
     },
     body: JSON.stringify(row),
   });
+  if (!res.ok) throw new Error(await res.text());
 }
 
 async function dbDelete(id: string): Promise<void> {
-  await fetch(`${TABLE}?id=eq.${id}`, { method: "DELETE", headers: { ...HEADERS, "Prefer": "return=minimal" } });
+  await fetch(`${TABLE}?id=eq.${id}`, {
+    method: "DELETE",
+    headers: { ...HEADERS, "Prefer": "return=minimal" },
+  });
 }
 
 // ─── EditableCell ──────────────────────────────────────────────────────────
 interface EditableCellProps {
   value: string;
   onChange: (val: string) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
   type?: "text" | "select" | "select-simple";
   options?: readonly string[];
   placeholder?: string;
   wide?: boolean;
 }
 
-function EditableCell({ value, onChange, type = "text", options, placeholder, wide }: EditableCellProps) {
+function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options, placeholder, wide }: EditableCellProps) {
   const [editing, setEditing] = useState(false);
+
+  const handleFocus = () => {
+    setEditing(true);
+    onFocus?.();
+  };
+
+  const handleBlur = () => {
+    setEditing(false);
+    onBlur?.();
+  };
 
   if (type === "select") {
     const c = STATUS_COLORS[value as Status] ?? { bg: "#2d1b69", text: "#c9a0f5", border: "#6b3fa0" };
     return (
-      <select value={value} onChange={e => onChange(e.target.value)} style={{
-        background: c.bg, color: c.text, border: `1px solid ${c.border}`,
-        borderRadius: 6, padding: "4px 8px", fontSize: 12,
-        fontFamily: "'Cinzel', serif", fontWeight: 700,
-        cursor: "pointer", width: "100%", outline: "none",
-      }}>
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        style={{
+          background: c.bg, color: c.text, border: `1px solid ${c.border}`,
+          borderRadius: 6, padding: "4px 8px", fontSize: 12,
+          fontFamily: "'Cinzel', serif", fontWeight: 700,
+          cursor: "pointer", width: "100%", outline: "none",
+        }}>
         {options!.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
     );
@@ -125,11 +145,16 @@ function EditableCell({ value, onChange, type = "text", options, placeholder, wi
 
   if (type === "select-simple") {
     return (
-      <select value={value} onChange={e => onChange(e.target.value)} style={{
-        background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a",
-        borderRadius: 6, padding: "4px 6px", fontSize: 12,
-        fontFamily: "'Cinzel', serif", cursor: "pointer", width: "100%", outline: "none",
-      }}>
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        style={{
+          background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a",
+          borderRadius: 6, padding: "4px 6px", fontSize: 12,
+          fontFamily: "'Cinzel', serif", cursor: "pointer", width: "100%", outline: "none",
+        }}>
         <option value="">--</option>
         {options!.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
@@ -137,9 +162,12 @@ function EditableCell({ value, onChange, type = "text", options, placeholder, wi
   }
 
   return editing ? (
-    <textarea autoFocus value={value}
+    <textarea
+      autoFocus
+      value={value}
       onChange={e => onChange(e.target.value)}
-      onBlur={() => setEditing(false)}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
       placeholder={placeholder}
       style={{
         width: "100%", minHeight: wide ? 60 : 32,
@@ -151,7 +179,9 @@ function EditableCell({ value, onChange, type = "text", options, placeholder, wi
       }}
     />
   ) : (
-    <div onClick={() => setEditing(true)} title="Clique para editar"
+    <div
+      onClick={handleFocus}
+      title="Clique para editar"
       style={{
         minHeight: 28, padding: "4px 6px",
         color: value ? "#e2d0ff" : "#5a3a8a", fontSize: 12,
@@ -169,33 +199,72 @@ function EditableCell({ value, onChange, type = "text", options, placeholder, wi
 
 // ─── App ───────────────────────────────────────────────────────────────────
 export default function App() {
-  const [rows, setRows]               = useState<Row[]>([]);
-  const [mes, setMes]                 = useState(new Date().getMonth());
-  const [filter, setFilter]           = useState("Todos");
-  const [filterRede, setFilterRede]   = useState("Todos");
-  const [loading, setLoading]         = useState(true);
-  const [syncStatus, setSyncStatus]   = useState<"ok" | "saving" | "error">("ok");
-  const pendingUpserts                = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [rows, setRows]             = useState<Row[]>([]);
+  const [mes, setMes]               = useState(new Date().getMonth());
+  const [filter, setFilter]         = useState("Todos");
+  const [filterRede, setFilterRede] = useState("Todos");
+  const [loading, setLoading]       = useState(true);
+  const [syncStatus, setSyncStatus] = useState<"ok" | "saving" | "error">("ok");
 
-  // Load rows for the selected month
-  const loadRows = useCallback(async (m: number) => {
-    setLoading(true);
+  // ── NEW: track editing focus depth so polling is paused while any cell is active ──
+  const editingCount = useRef(0);
+  const isEditing = () => editingCount.current > 0;
+
+  const handleCellFocus = () => { editingCount.current += 1; };
+  const handleCellBlur  = () => { editingCount.current = Math.max(0, editingCount.current - 1); };
+
+  // Track which row IDs have pending saves — polling won't overwrite these
+  const pendingUpserts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Keep latest rows accessible inside async callbacks without stale closure
+  const rowsRef = useRef<Row[]>([]);
+
+  const setRowsSafe = (updater: (prev: Row[]) => Row[]) => {
+    setRows(prev => {
+      const next = updater(prev);
+      rowsRef.current = next;
+      return next;
+    });
+  };
+
+  // ── Initial load ──
+  const loadRows = useCallback(async (m: number, force = false) => {
+    // ── PAUSE POLL WHILE USER IS EDITING ──
+    if (force && isEditing()) return;
+
+    if (!force) setLoading(true);
     try {
       const data = await dbLoad(m);
-      setRows(data);
-    } catch { setSyncStatus("error"); }
-    finally { setLoading(false); }
+      setRows(prev => {
+        const pending = pendingUpserts.current;
+        const merged = data.map(serverRow => {
+          if (pending.has(serverRow.id)) {
+            const local = prev.find(r => r.id === serverRow.id);
+            return local ?? serverRow;
+          }
+          return serverRow;
+        });
+        const serverIds = new Set(data.map(r => r.id));
+        const localOnly = prev.filter(r => !serverIds.has(r.id));
+        const result = [...merged, ...localOnly];
+        rowsRef.current = result;
+        return result;
+      });
+    } catch {
+      setSyncStatus("error");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { loadRows(mes); }, [mes, loadRows]);
 
-  // Poll every 12s for changes made by other users
+  // ── Safe polling: pauses when editing, merges instead of overwriting ──
   useEffect(() => {
-    const interval = setInterval(() => loadRows(mes), 12000);
+    const interval = setInterval(() => loadRows(mes, true), 15000);
     return () => clearInterval(interval);
   }, [mes, loadRows]);
 
-  // Debounced upsert on any row change
+  // ── Debounced upsert ──
   const scheduleUpsert = useCallback((row: Row) => {
     setSyncStatus("saving");
     const existing = pendingUpserts.current.get(row.id);
@@ -204,14 +273,17 @@ export default function App() {
       try {
         await dbUpsert(row);
         setSyncStatus("ok");
-      } catch { setSyncStatus("error"); }
-      pendingUpserts.current.delete(row.id);
-    }, 900);
+      } catch {
+        setSyncStatus("error");
+      } finally {
+        pendingUpserts.current.delete(row.id);
+      }
+    }, 1000);
     pendingUpserts.current.set(row.id, t);
   }, []);
 
   const updateRow = (id: string, key: keyof Row, val: string) => {
-    setRows(prev => {
+    setRowsSafe(prev => {
       const next = prev.map(r => r.id === id ? { ...r, [key]: val } : r);
       const updated = next.find(r => r.id === id);
       if (updated) scheduleUpsert(updated);
@@ -220,14 +292,27 @@ export default function App() {
   };
 
   const addRow = async () => {
-    const row = makeRow(rows.length + 1, mes);
-    setRows(prev => [...prev, row]);
-    try { await dbUpsert(row); } catch { setSyncStatus("error"); }
+    const row = makeRow(rowsRef.current.length + 1, mes);
+    setRowsSafe(prev => [...prev, row]);
+    try {
+      await dbUpsert(row);
+    } catch {
+      setSyncStatus("error");
+    }
   };
 
   const removeRow = async (id: string) => {
-    setRows(prev => prev.filter(r => r.id !== id));
-    try { await dbDelete(id); } catch { setSyncStatus("error"); }
+    const pending = pendingUpserts.current.get(id);
+    if (pending) {
+      clearTimeout(pending);
+      pendingUpserts.current.delete(id);
+    }
+    setRowsSafe(prev => prev.filter(r => r.id !== id));
+    try {
+      await dbDelete(id);
+    } catch {
+      setSyncStatus("error");
+    }
   };
 
   const filtered = rows.filter(r =>
@@ -287,7 +372,7 @@ export default function App() {
           }}>
             {syncLabel}
           </span>
-          <span style={{ fontSize: 10, color: "#3d1b69" }}>• atualiza a cada 12s</span>
+          <span style={{ fontSize: 10, color: "#3d1b69" }}>• atualiza a cada 15s</span>
         </div>
       </div>
 
@@ -408,6 +493,8 @@ export default function App() {
                     <EditableCell
                       value={String(row[col.key] ?? "")}
                       onChange={val => updateRow(row.id, col.key, val)}
+                      onFocus={handleCellFocus}
+                      onBlur={handleCellBlur}
                       type={col.type} options={col.options}
                       placeholder={col.placeholder} wide={col.wide}
                     />
