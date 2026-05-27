@@ -377,7 +377,7 @@ export default function App() {
         display: "flex", alignItems: "center", gap: 20, marginBottom: 22,
         borderBottom: "2px solid #4a2a8a", paddingBottom: 18, flexWrap: "wrap",
       }}>
-        <img src="/icons/criandoxp.png" alt="Criando XP" style={{ width: 50, height: 50, objectFit: "contain", animation: "float 4s ease-in-out infinite" }} />
+        <img src="/icons/criandoxp.png" alt="Criando XP" style={{ width: 80, height: 80, objectFit: "contain", animation: "float 4s ease-in-out infinite" }} />
         <div>
           <div style={{
             fontFamily: "'Cinzel', serif", fontSize: 24, fontWeight: 900,
