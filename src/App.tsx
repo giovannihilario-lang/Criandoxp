@@ -93,15 +93,13 @@ interface ColDef {
 }
 
 const COLS: ColDef[] = [
-  { key: "postagem",    label: "Postagem",     width: 90,  type: "text",          placeholder: "Postagem" },
-  { key: "data",        label: "📅 Data",       width: 140, type: "text",          placeholder: "dd/mm/aaaa" },
-  { key: "rede",        label: "🌐 Rede",        width: 120, type: "select-rede",   options: REDE_OPTIONS },
+  { key: "Postagem",    label: "Postagem",     width: 90,  type: "text",          placeholder: "Postagem" },
+  { key: "data",        label: "📅 Data",       width: 110, type: "text",          placeholder: "dd/mm/aaaa" },
+  { key: "rede",        label: "🌐 Rede",        width: 110, type: "select-simple", options: REDE_OPTIONS },
   { key: "formato",     label: "🎞 Formato",     width: 110, type: "select-simple", options: FORMATO_OPTIONS },
   { key: "tema",        label: "✨ Tema",         width: 160, type: "text",          placeholder: "Título / tema do post", wide: true },
-  { key: "briefing",    label: "📝 Briefing",    width: 240, type: "text",          placeholder: "Descrição, referências, copy...", wide: true },
   { key: "responsavel", label: "👤 Responsável", width: 120, type: "text",          placeholder: "Nome" },
   { key: "status",      label: "🔮 Status",      width: 130, type: "select",        options: STATUS_OPTIONS },
-  { key: "observacoes", label: "💬 Obs",         width: 180, type: "text",          placeholder: "Notas extras...", wide: true },
 ];
 
 const makeRow = (n: number, mes: number): Row => ({
