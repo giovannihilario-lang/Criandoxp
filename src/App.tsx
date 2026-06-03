@@ -1338,4 +1338,3 @@ export default function App() {
   if (route === "#/dashboard") return <DashboardGate />;
   return <LandingPage />;
 }
-}
