@@ -10,6 +10,7 @@ const HEADERS = {
   "Authorization": `Bearer ${SUPABASE_KEY}`,
 };
 const TABLE = `${SUPABASE_URL}/rest/v1/postagens`;
+const DASHBOARD_PWD = btoa("CriandoXP2025"); // Elevandonivel120
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -530,7 +531,88 @@ function TrafegoView() {
 }
 
 // ─── App ───────────────────────────────────────────────────────────────────
-export default function App() {
+function DashboardGate() {
+  const [input, setInput]   = useState("");
+  const [error, setError]   = useState(false);
+  const [authed, setAuthed] = useState(
+    () => sessionStorage.getItem("cxp_auth") === DASHBOARD_PWD
+  );
+
+  const tryLogin = () => {
+    if (btoa(input) === DASHBOARD_PWD) {
+      sessionStorage.setItem("cxp_auth", DASHBOARD_PWD);
+      setAuthed(true);
+    } else {
+      setError(true);
+      setTimeout(() => setError(false), 2000);
+    }
+  };
+
+  if (authed) return <Dashboard />;
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(135deg, #0d0720 0%, #1a0d3a 40%, #0d0720 100%)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontFamily: "'Lato', sans-serif",
+    }}>
+      <style>{GLOBAL_STYLES}</style>
+      <div style={{
+        background: "linear-gradient(135deg, #1a0d3a, #110828)",
+        border: `1px solid ${error ? "#ef4444" : "#4a2a8a"}`,
+        borderRadius: 20, padding: "48px 40px", width: "100%", maxWidth: 380,
+        textAlign: "center", animation: "glow 4s ease-in-out infinite",
+        transition: "border-color 0.3s",
+      }}>
+        <img src="/icons/criandoxp.png" alt="Criando XP"
+          style={{ width: 72, height: 72, objectFit: "contain",
+            animation: "float 4s ease-in-out infinite", marginBottom: 20 }} />
+        <div style={{
+          fontFamily: "'Cinzel', serif", fontSize: 20, fontWeight: 900,
+          background: "linear-gradient(90deg, #c084fc, #e879f9)",
+          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          marginBottom: 6,
+        }}>Criando XP</div>
+        <div style={{ fontSize: 11, color: "#5a3a8a", fontFamily: "'Cinzel', serif",
+          letterSpacing: 3, textTransform: "uppercase", marginBottom: 32 }}>
+          Área Restrita
+        </div>
+        <input
+          type="password"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && tryLogin()}
+          placeholder="••••••••••••"
+          style={{
+            width: "100%", background: "#0d0720", color: "#e2d0ff",
+            border: `1px solid ${error ? "#ef4444" : "#3d1b69"}`,
+            borderRadius: 10, padding: "14px 16px", fontSize: 16,
+            fontFamily: "'Lato', sans-serif", outline: "none",
+            textAlign: "center", letterSpacing: 4, marginBottom: 8,
+            transition: "border-color 0.3s",
+          }}
+          onFocus={e => (e.currentTarget.style.borderColor = error ? "#ef4444" : "#7c3aed")}
+          onBlur={e => (e.currentTarget.style.borderColor = error ? "#ef4444" : "#3d1b69")}
+        />
+        {error && (
+          <div style={{ fontSize: 12, color: "#f87171", marginBottom: 8,
+            fontFamily: "'Cinzel', serif", letterSpacing: 1 }}>
+            ⚠ Senha incorreta
+          </div>
+        )}
+        <button onClick={tryLogin} style={{
+          width: "100%", background: "linear-gradient(135deg, #4a2a8a, #7c3aed)",
+          color: "#fff", border: "none", borderRadius: 10, padding: "14px",
+          fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700,
+          cursor: "pointer", letterSpacing: 2, marginTop: 8,
+          boxShadow: "0 4px 20px rgba(124,58,237,0.4)",
+        }}>ENTRAR</button>
+      </div>
+    </div>
+  );
+}
+function Dashboard() {
   const [rows, setRows]             = useState<Row[]>([]);
   const [mes, setMes]               = useState(new Date().getMonth());
   const [filter, setFilter]         = useState("Todos");
@@ -547,6 +629,10 @@ export default function App() {
   const setRowsSafe = (updater: (prev: Row[]) => Row[]) => {
     setRows(prev => { const next = updater(prev); rowsRef.current = next; return next; });
   };
+  
+  export default function App() {
+    return <DashboardGate />;
+  }
 
   const loadRows = useCallback(async (m: number, force = false) => {
     if (!force) setLoading(true);
