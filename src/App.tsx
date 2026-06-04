@@ -345,26 +345,6 @@ function DayPanel({ day, mes, rows, onClose, isMobile }: { day: number; mes: num
 }
 
 // ─── Tráfego ───────────────────────────────────────────────────────────────
-const CAMPAIGNS = [
-  { id: 1, nome: "Tráfego — Anunciantes do Instagram", periodo: "11 abr → 15 abr 2026", vizTotal: 26259, vizUnicos: 24385, resultado: 307, tipoResultado: "cliques no link",  best: false },
-  { id: 2, nome: "Post Mayou — 3ª rodada",             periodo: "9 mai → 13 mai 2026",   vizTotal: 17846, vizUnicos: 14477, resultado: 556, tipoResultado: "visitas à página", best: true  },
-  { id: 3, nome: "Post Gio 2 — 2ª rodada",             periodo: "14 mai → 17 mai 2026",  vizTotal: 13935, vizUnicos: 11389, resultado: 191, tipoResultado: "visitas à página", best: false },
-  { id: 4, nome: "Post Mayou — 1ª rodada",             periodo: "5 abr → 9 abr 2026",    vizTotal: 10537, vizUnicos: 8002,  resultado: 182, tipoResultado: "visitas à página", best: false },
-  { id: 5, nome: "Post Gio 3 — 3ª rodada",             periodo: "20 mai → 23 mai 2026",  vizTotal: 9341,  vizUnicos: 7902,  resultado: 134, tipoResultado: "visitas à página", best: false },
-  { id: 6, nome: "Post Gio 1 — 1ª rodada",             periodo: "21 abr → 24 abr 2026",  vizTotal: 7784,  vizUnicos: 6557,  resultado: 96,  tipoResultado: "visitas à página", best: false },
-  { id: 7, nome: "Post Mayou — 2ª rodada",             periodo: "26 abr → 30 abr 2026",  vizTotal: 1049,  vizUnicos: 951,   resultado: 9,   tipoResultado: "visitas à página", best: false },
-];
-
-const AUDIENCE_DATA = [
-  { faixa: "18–24", homens: 20, mulheres: 2,   total: 22 },
-  { faixa: "25–34", homens: 40, mulheres: 5,   total: 45 },
-  { faixa: "35–44", homens: 22, mulheres: 2,   total: 24 },
-  { faixa: "45–54", homens: 7,  mulheres: 1,   total: 8  },
-  { faixa: "55–64", homens: 1,  mulheres: 0.5, total: 1  },
-  { faixa: "65+",   homens: 1,  mulheres: 0,   total: 1  },
-];
-
-const fmtNum = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
 
 function TrafegoView({ isMobile }: { isMobile: boolean }) {
   const [campaigns, setCampaigns] = useState<any[]>([]);
