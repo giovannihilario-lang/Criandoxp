@@ -335,7 +335,7 @@ function Beneficios() {
   );
 }
 
-function Sistemas({ onInscrever }: { onInscrever: () => void }) {
+function Sistemas() {
   const sistemas = [
     { icon: "⚔️", nome: "D&D" },
     { icon: "🧛", nome: "Vampire" },
@@ -763,7 +763,7 @@ export default function LandingPage({ onAbrirDashboard }: { onAbrirDashboard: ()
 
           <Hero onInscrever={() => setPaginaAtual("form")} />
           <Beneficios />
-          <Sistemas onInscrever={() => setPaginaAtual("form")} />
+          <Sistemas/>
           <Contrato />
 
           {/* CTA final */}
