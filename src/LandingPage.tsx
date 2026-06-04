@@ -241,7 +241,7 @@ function Navbar({ onInscrever }: { onInscrever: () => void }) {
       display: "flex", alignItems: "center", justifyContent: "space-between",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <img src="/icons/criandoxp.png" alt="Criando XP" style={{ width: 36, height: 36, objectFit: "contain" }} />
+      <img src="/icons/criandoxp.png" alt="Criando XP" style={{ width: 36, height: 36, objectFit: "contain" }} onClick={handleLogoClick} />
         <span style={{ fontFamily: "'Cinzel', serif", fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#c084fc,#818cf8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Criando XP</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -752,7 +752,7 @@ export default function LandingPage({ onAbrirDashboard }: { onAbrirDashboard: ()
 
       {paginaAtual === "landing" ? (
         <>
-          <Navbar onInscrever={() => setPaginaAtual("form")} />
+  <Navbar onInscrever={() => setPaginaAtual("form")} onLogoClick={handleLogoClick} />
 
           {/* Logo clicável secreto — fica invisível no canto */}
           <div
@@ -786,7 +786,7 @@ export default function LandingPage({ onAbrirDashboard }: { onAbrirDashboard: ()
         </>
       ) : (
         <>
-          <Navbar onInscrever={() => {}} />
+          <Navbar onInscrever={() => {}} onLogoClick={handleLogoClick} />
           <Formulario onVoltar={() => setPaginaAtual("landing")} />
           <Footer />
         </>
