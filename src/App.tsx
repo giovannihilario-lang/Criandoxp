@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import LandingPage from "./LandingPage";
 
+// ─── Supabase ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://zovgkatndrgzxocwpdjm.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvdmdrYXRuZHJnenhvY3dwZGptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MzY4MjEsImV4cCI6MjA5NTMxMjgyMX0.jm_BaUCN3CHPP9Rut2HM8KRVWes5nZLhJ_oyKbdqDXs";
 const HEADERS = {
@@ -10,6 +12,7 @@ const HEADERS = {
 };
 const TABLE = `${SUPABASE_URL}/rest/v1/postagens`;
 
+// ─── Constantes ────────────────────────────────────────────────────────────
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const WEEKDAYS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const STATUS_OPTIONS = ["Planejado","Em produção","Agendado","Publicado","Cancelado"] as const;
@@ -17,15 +20,16 @@ const FORMATO_OPTIONS = ["Post","Reels","Story","Carrossel","Live","Shorts","Thr
 const REDE_OPTIONS = ["Instagram","TikTok","YouTube","Twitter/X","Facebook","Todos"];
 type Status = typeof STATUS_OPTIONS[number];
 type ViewMode = "tabela" | "calendario";
-type AppTab = "calendario" | "trafego";
+type AppTab = "calendario" | "trafego" | "leads";
+type AppPage = "landing" | "dashboard";
 
 const REDE_ICONS: Record<string, string> = {
-  "Instagram": "/icons/instagram.png",
-  "TikTok":    "/icons/tiktok.png",
-  "YouTube":   "/icons/youtube.png",
-  "Twitter/X": "/icons/twitter.png",
-  "Facebook":  "/icons/facebook.png",
-  "Todos":     "/icons/todos.png",
+  "Instagram": "📸",
+  "TikTok":    "🎵",
+  "YouTube":   "▶️",
+  "Twitter/X": "𝕏",
+  "Facebook":  "👤",
+  "Todos":     "🌐",
 };
 
 const STATUS_COLORS: Record<Status, { bg: string; text: string; border: string; rowBg: string; calBg: string }> = {
@@ -36,6 +40,7 @@ const STATUS_COLORS: Record<Status, { bg: string; text: string; border: string; 
   "Cancelado":    { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626", rowBg: "rgba(58,26,26,0.22)",   calBg: "#3a1a1add" },
 };
 
+// ─── Helpers ───────────────────────────────────────────────────────────────
 function parseDateBR(dateStr: string): Date | null {
   if (!dateStr) return null;
   const [d, m, y] = dateStr.split("/");
@@ -50,10 +55,9 @@ function getUrgency(dateStr: string, status: Status): Urgency {
   if (status === "Publicado" || status === "Cancelado") return null;
   const date = parseDateBR(dateStr);
   if (!date) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
-  const diff = Math.round((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const today = new Date(); today.setHours(0,0,0,0);
+  date.setHours(0,0,0,0);
+  const diff = Math.round((date.getTime() - today.getTime()) / 86400000);
   if (diff === 0) return "hoje";
   if (diff === 1) return "amanha";
   if (diff === 2) return "em2";
@@ -68,6 +72,7 @@ const URGENCY_STYLES: Record<NonNullable<Urgency>, { border: string; rowBg: stri
   em3:    { border: "#6ee7b7", rowBg: "rgba(110,231,183,0.07)", badge: "3 DIAS", badgeBg: "#059669", badgeColor: "#fff",    anim: "none" },
 };
 
+// ─── Types ─────────────────────────────────────────────────────────────────
 interface Row {
   id: string;
   postagem: string;
@@ -82,11 +87,28 @@ interface Row {
   mes: number;
 }
 
+interface Lead {
+  id: string;
+  created_at: string;
+  nome: string;
+  idade: string;
+  whatsapp_discord: string;
+  tempo_rpg: string;
+  sistemas_jogados: string;
+  sistemas_desejados: string;
+  melhor_dia: string;
+  melhor_periodo: string;
+  status: string;
+  notas: string;
+  codigo_desconto: string;
+  pronto_ingressar: string;
+}
+
 interface ColDef {
   key: keyof Row;
   label: string;
   width: number;
-  type: "text" | "select" | "select-simple" | "select-rede";
+  type: "text" | "select" | "select-simple";
   options?: readonly string[];
   placeholder?: string;
   wide?: boolean;
@@ -97,7 +119,7 @@ const COLS: ColDef[] = [
   { key: "data",        label: "📅 Data",       width: 110, type: "text",          placeholder: "dd/mm/aaaa" },
   { key: "rede",        label: "🌐 Rede",        width: 110, type: "select-simple", options: REDE_OPTIONS },
   { key: "formato",     label: "🎞 Formato",     width: 110, type: "select-simple", options: FORMATO_OPTIONS },
-  { key: "tema",        label: "✨ Tema",         width: 160, type: "text",          placeholder: "Título / tema do post", wide: true },
+  { key: "tema",        label: "✨ Tema",         width: 160, type: "text",          placeholder: "Título / tema", wide: true },
   { key: "responsavel", label: "👤 Responsável", width: 120, type: "text",          placeholder: "Nome" },
   { key: "status",      label: "🔮 Status",      width: 130, type: "select",        options: STATUS_OPTIONS },
 ];
@@ -109,6 +131,7 @@ const makeRow = (n: number, mes: number): Row => ({
   observacoes: "", mes,
 });
 
+// ─── Supabase ops ──────────────────────────────────────────────────────────
 async function dbLoad(mes: number): Promise<Row[]> {
   const res = await fetch(`${TABLE}?mes=eq.${mes}&select=*`, {
     headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
@@ -133,61 +156,76 @@ async function dbDelete(id: string): Promise<void> {
   });
 }
 
+async function dbLoadLeads(): Promise<Lead[]> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/clientes?select=*&order=created_at.desc`, {
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function dbUpdateLeadStatus(id: string, status: string): Promise<void> {
+  await fetch(`${SUPABASE_URL}/rest/v1/clientes?id=eq.${id}`, {
+    method: "PATCH",
+    headers: { ...HEADERS, "Prefer": "return=minimal" },
+    body: JSON.stringify({ status }),
+  });
+}
+
 // ─── Hook responsivo ───────────────────────────────────────────────────────
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener("resize", handler);
-    return () => window.removeEventListener("resize", handler);
+    const h = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
   }, []);
   return isMobile;
 }
 
-// ─── EditableCell ──────────────────────────────────────────────────────────
-interface EditableCellProps {
-  value: string;
-  onChange: (val: string) => void;
-  onFocus?: () => void;
-  onBlur?: () => void;
-  type?: "text" | "select" | "select-simple" | "select-rede";
-  options?: readonly string[];
-  placeholder?: string;
-  wide?: boolean;
-  urgency?: Urgency;
-}
+// ─── CSS global ───────────────────────────────────────────────────────────
+const GLOBAL_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Lato:wght@300;400;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #0d0720; }
+  ::-webkit-scrollbar-thumb { background: #4a2a8a; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #7c3aed; }
+  @keyframes float        { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+  @keyframes glow         { 0%,100%{box-shadow:0 0 20px #7c3aed44} 50%{box-shadow:0 0 40px #7c3aed88} }
+  @keyframes blink        { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  @keyframes spin         { to{transform:rotate(360deg)} }
+  @keyframes pulse-red    { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.5)} 50%{box-shadow:0 0 0 4px rgba(239,68,68,0)} }
+  @keyframes pulse-yellow { 0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.5)} 50%{box-shadow:0 0 0 4px rgba(245,158,11,0)} }
+  @keyframes shimmer      { 0%{background-position:200% center} 100%{background-position:-200% center} }
+  @keyframes fadeUp       { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes gridPulse    { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
+  @keyframes popIn        { 0%{transform:scale(0.85);opacity:0} 100%{transform:scale(1);opacity:1} }
+  input::placeholder { color: #5a3a8a; }
+  select, button, input { -webkit-tap-highlight-color: transparent; }
+`;
 
-function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options, placeholder, wide, urgency }: EditableCellProps) {
+// ─── EditableCell ──────────────────────────────────────────────────────────
+function EditableCell({ value, onChange, type = "text", options, placeholder, wide, urgency }: {
+  value: string; onChange: (v: string) => void;
+  type?: "text" | "select" | "select-simple";
+  options?: readonly string[]; placeholder?: string; wide?: boolean; urgency?: Urgency;
+}) {
   const [editing, setEditing] = useState(false);
-  const handleFocus = () => { setEditing(true); onFocus?.(); };
-  const handleBlur  = () => { setEditing(false); onBlur?.(); };
 
   if (type === "select") {
     const c = STATUS_COLORS[value as Status] ?? { bg: "#2d1b69", text: "#c9a0f5", border: "#6b3fa0" };
     return (
-      <select value={value} onChange={e => onChange(e.target.value)} onFocus={onFocus} onBlur={onBlur}
+      <select value={value} onChange={e => onChange(e.target.value)}
         style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: 6, padding: "6px 8px", fontSize: 13, fontFamily: "'Cinzel', serif", fontWeight: 700, cursor: "pointer", width: "100%", outline: "none" }}>
         {options!.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
     );
   }
-  if (type === "select-rede") {
-    const icon = REDE_ICONS[value];
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-        {icon && <img src={icon} alt={value} style={{ width: 18, height: 18, objectFit: "contain", borderRadius: 3 }} />}
-        <select value={value} onChange={e => onChange(e.target.value)} onFocus={onFocus} onBlur={onBlur}
-          style={{ background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 6, padding: "6px 6px", fontSize: 13, fontFamily: "'Cinzel', serif", cursor: "pointer", flex: 1, outline: "none" }}>
-          <option value="">--</option>
-          {options!.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-      </div>
-    );
-  }
   if (type === "select-simple") {
     return (
-      <select value={value} onChange={e => onChange(e.target.value)} onFocus={onFocus} onBlur={onBlur}
-        style={{ background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 6, padding: "6px 6px", fontSize: 13, fontFamily: "'Cinzel', serif", cursor: "pointer", width: "100%", outline: "none" }}>
+      <select value={value} onChange={e => onChange(e.target.value)}
+        style={{ background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 6, padding: "6px", fontSize: 13, fontFamily: "'Cinzel', serif", cursor: "pointer", width: "100%", outline: "none" }}>
         <option value="">--</option>
         {options!.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
@@ -196,99 +234,15 @@ function EditableCell({ value, onChange, onFocus, onBlur, type = "text", options
 
   const us = urgency ? URGENCY_STYLES[urgency] : null;
   return editing ? (
-    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} placeholder={placeholder}
+    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)} onBlur={() => setEditing(false)} placeholder={placeholder}
       style={{ width: "100%", minHeight: wide ? 60 : 36, background: "#1a0d3a", color: "#e2d0ff", border: "1px solid #7c3aed", borderRadius: 6, padding: "6px 8px", fontSize: 13, fontFamily: "'Lato', sans-serif", resize: "vertical", outline: "none", boxSizing: "border-box" }} />
   ) : (
-    <div onClick={handleFocus} title="Clique para editar"
-      style={{ minHeight: 32, padding: "6px 6px", color: value ? "#e2d0ff" : "#5a3a8a", fontSize: 13, fontFamily: "'Lato', sans-serif", cursor: "text", borderRadius: 4, transition: "background 0.15s", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+    <div onClick={() => setEditing(true)}
+      style={{ minHeight: 32, padding: "6px", color: value ? "#e2d0ff" : "#5a3a8a", fontSize: 13, fontFamily: "'Lato', sans-serif", cursor: "text", borderRadius: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
       onMouseEnter={e => (e.currentTarget.style.background = "#2d1b69")}
-      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-    >
+      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
       {value || <span style={{ fontStyle: "italic", opacity: 0.4 }}>{placeholder ?? "—"}</span>}
       {us && <span style={{ display: "inline-block", marginLeft: 6, background: us.badgeBg, color: us.badgeColor, fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel', serif", borderRadius: 4, padding: "1px 5px", letterSpacing: 1, animation: us.anim, verticalAlign: "middle" }}>{us.badge}</span>}
-    </div>
-  );
-}
-
-// ─── PostagemCard (mobile) ─────────────────────────────────────────────────
-function PostagemCard({ row, idx, onUpdate, onDuplicate, onRemove }: {
-  row: Row; idx: number;
-  onUpdate: (id: string, key: keyof Row, val: string) => void;
-  onDuplicate: (row: Row) => void;
-  onRemove: (id: string) => void;
-}) {
-  const urgency = getUrgency(row.data, row.status);
-  const us = urgency ? URGENCY_STYLES[urgency] : null;
-  const sc = STATUS_COLORS[row.status];
-  const icon = REDE_ICONS[row.rede];
-
-  return (
-    <div style={{
-      background: us ? us.rowBg : sc.rowBg,
-      border: `1px solid ${us ? us.border : sc.border}`,
-      borderLeft: `4px solid ${us ? us.border : sc.border}`,
-      borderRadius: 12,
-      padding: "14px 14px 10px",
-      marginBottom: 10,
-    }}>
-      {/* topo: número + rede + ações */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 10, color: "#5a3a8a", fontFamily: "'Cinzel', serif" }}>#{idx + 1}</span>
-          {icon && <img src={icon} alt={row.rede} style={{ width: 18, height: 18, objectFit: "contain" }} />}
-          <span style={{ fontSize: 11, color: "#c9a0f5", fontFamily: "'Cinzel', serif" }}>{row.rede || "—"}</span>
-          {us && <span style={{ background: us.badgeBg, color: us.badgeColor, fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel', serif", borderRadius: 4, padding: "2px 6px", letterSpacing: 1, animation: us.anim }}>{us.badge}</span>}
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={() => onDuplicate(row)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 16, padding: "4px" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "#c084fc")} onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}>📋</button>
-          <button onClick={() => onRemove(row.id)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 16, padding: "4px" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")} onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}>✕</button>
-        </div>
-      </div>
-
-      {/* campos em grid 2 colunas */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px" }}>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2, letterSpacing: 1 }}>POSTAGEM</div>
-          <EditableCell value={row.postagem} onChange={v => onUpdate(row.id, "postagem", v)} placeholder="Postagem" />
-        </div>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2, letterSpacing: 1 }}>✨ TEMA</div>
-          <EditableCell value={row.tema} onChange={v => onUpdate(row.id, "tema", v)} placeholder="Título / tema do post" wide />
-        </div>
-        <div>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2, letterSpacing: 1 }}>📅 DATA</div>
-          <EditableCell value={row.data} onChange={v => onUpdate(row.id, "data", v)} placeholder="dd/mm/aaaa" urgency={urgency} />
-        </div>
-        <div>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2, letterSpacing: 1 }}>🎞 FORMATO</div>
-          <select value={row.formato} onChange={e => onUpdate(row.id, "formato", e.target.value)}
-            style={{ background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 6, padding: "6px", fontSize: 13, fontFamily: "'Cinzel', serif", cursor: "pointer", width: "100%", outline: "none" }}>
-            <option value="">--</option>
-            {FORMATO_OPTIONS.map(o => <option key={o}>{o}</option>)}
-          </select>
-        </div>
-        <div>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2, letterSpacing: 1 }}>🌐 REDE</div>
-          <select value={row.rede} onChange={e => onUpdate(row.id, "rede", e.target.value)}
-            style={{ background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 6, padding: "6px", fontSize: 13, fontFamily: "'Cinzel', serif", cursor: "pointer", width: "100%", outline: "none" }}>
-            <option value="">--</option>
-            {REDE_OPTIONS.map(o => <option key={o}>{o}</option>)}
-          </select>
-        </div>
-        <div>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2, letterSpacing: 1 }}>👤 RESPONSÁVEL</div>
-          <EditableCell value={row.responsavel} onChange={v => onUpdate(row.id, "responsavel", v)} placeholder="Nome" />
-        </div>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 4, letterSpacing: 1 }}>🔮 STATUS</div>
-          <select value={row.status} onChange={e => onUpdate(row.id, "status", e.target.value)}
-            style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.border}`, borderRadius: 6, padding: "6px 8px", fontSize: 13, fontFamily: "'Cinzel', serif", fontWeight: 700, cursor: "pointer", width: "100%", outline: "none" }}>
-            {STATUS_OPTIONS.map(o => <option key={o}>{o}</option>)}
-          </select>
-        </div>
-      </div>
     </div>
   );
 }
@@ -299,8 +253,7 @@ function CalendarView({ rows, mes, onSelectDay, isMobile }: { rows: Row[]; mes: 
   const firstDay = new Date(year, mes, 1).getDay();
   const daysInMonth = new Date(year, mes + 1, 0).getDate();
   const today = new Date();
-  const isCurrentMonth = today.getMonth() === mes && today.getFullYear() === year;
-  const todayDay = isCurrentMonth ? today.getDate() : -1;
+  const todayDay = (today.getMonth() === mes && today.getFullYear() === year) ? today.getDate() : -1;
 
   const byDay: Record<number, Row[]> = {};
   rows.forEach(r => {
@@ -316,48 +269,35 @@ function CalendarView({ rows, mes, onSelectDay, isMobile }: { rows: Row[]; mes: 
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
-  const cellMinH = isMobile ? 54 : 80;
-  const dayFontSize = isMobile ? 10 : 11;
-
   return (
-    <div style={{ padding: "0 0 8px" }}>
+    <div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMobile ? 2 : 4, marginBottom: 4 }}>
-        {WEEKDAYS.map(w => (
-          <div key={w} style={{ textAlign: "center", padding: "6px 0", fontFamily: "'Cinzel', serif", fontSize: isMobile ? 8 : 10, color: "#7c3aed", fontWeight: 700, letterSpacing: 1 }}>{w}</div>
-        ))}
+        {WEEKDAYS.map(w => <div key={w} style={{ textAlign: "center", padding: "6px 0", fontFamily: "'Cinzel', serif", fontSize: isMobile ? 8 : 10, color: "#7c3aed", fontWeight: 700 }}>{w}</div>)}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMobile ? 2 : 4 }}>
         {cells.map((day, idx) => {
-          if (day === null) return <div key={`empty-${idx}`} style={{ minHeight: cellMinH }} />;
+          if (day === null) return <div key={`e-${idx}`} style={{ minHeight: isMobile ? 54 : 80 }} />;
           const dayRows = byDay[day] ?? [];
           const isToday = day === todayDay;
           const hasUrgent = dayRows.some(r => { const u = getUrgency(r.data, r.status); return u === "hoje" || u === "amanha"; });
           return (
             <div key={day} onClick={() => dayRows.length > 0 && onSelectDay(dayRows, day)}
-              style={{ minHeight: cellMinH, background: isToday ? "linear-gradient(135deg, #3d1b8a55, #7c3aed33)" : "#110828", border: isToday ? "2px solid #7c3aed" : hasUrgent ? "1px solid #ef4444" : "1px solid #2d1b69", borderRadius: isMobile ? 5 : 8, padding: isMobile ? "4px 3px" : "6px 6px 4px", cursor: dayRows.length > 0 ? "pointer" : "default", transition: "all 0.15s", position: "relative", overflow: "hidden" }}>
+              style={{ minHeight: isMobile ? 54 : 80, background: isToday ? "linear-gradient(135deg,#3d1b8a55,#7c3aed33)" : "#110828", border: isToday ? "2px solid #7c3aed" : hasUrgent ? "1px solid #ef4444" : "1px solid #2d1b69", borderRadius: isMobile ? 5 : 8, padding: isMobile ? "4px 3px" : "6px", cursor: dayRows.length > 0 ? "pointer" : "default", position: "relative", overflow: "hidden" }}>
               {hasUrgent && <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "pulse-red 1s ease-in-out infinite", display: "block" }} />}
-              <div style={{ fontFamily: "'Cinzel', serif", fontSize: isToday ? dayFontSize + 2 : dayFontSize, fontWeight: isToday ? 900 : 400, color: isToday ? "#c084fc" : "#5a3a8a", marginBottom: 2 }}>{day}</div>
-              {!isMobile && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  {dayRows.slice(0, 3).map(r => {
-                    const sc = STATUS_COLORS[r.status];
-                    const icon = REDE_ICONS[r.rede];
-                    return (
-                      <div key={r.id} style={{ background: sc.calBg, border: `1px solid ${sc.border}`, borderRadius: 4, padding: "2px 4px", display: "flex", alignItems: "center", gap: 3 }}>
-                        {icon && <img src={icon} alt={r.rede} style={{ width: 10, height: 10, objectFit: "contain", borderRadius: 2, flexShrink: 0 }} />}
-                        <span style={{ fontSize: 9, color: sc.text, fontFamily: "'Lato', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{r.tema || r.postagem}</span>
-                      </div>
-                    );
-                  })}
-                  {dayRows.length > 3 && <div style={{ fontSize: 9, color: "#7c3aed", fontFamily: "'Cinzel', serif", textAlign: "center" }}>+{dayRows.length - 3}</div>}
-                </div>
-              )}
+              <div style={{ fontFamily: "'Cinzel', serif", fontSize: isToday ? (isMobile ? 12 : 13) : (isMobile ? 10 : 11), fontWeight: isToday ? 900 : 400, color: isToday ? "#c084fc" : "#5a3a8a", marginBottom: 2 }}>{day}</div>
+              {!isMobile && dayRows.slice(0, 3).map(r => {
+                const sc = STATUS_COLORS[r.status];
+                return (
+                  <div key={r.id} style={{ background: sc.calBg, border: `1px solid ${sc.border}`, borderRadius: 4, padding: "2px 4px", marginBottom: 2, display: "flex", alignItems: "center", gap: 3 }}>
+                    <span style={{ fontSize: 8 }}>{REDE_ICONS[r.rede] || "📄"}</span>
+                    <span style={{ fontSize: 9, color: sc.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.tema || r.postagem}</span>
+                  </div>
+                );
+              })}
+              {!isMobile && dayRows.length > 3 && <div style={{ fontSize: 9, color: "#7c3aed", textAlign: "center" }}>+{dayRows.length - 3}</div>}
               {isMobile && dayRows.length > 0 && (
                 <div style={{ display: "flex", gap: 1, flexWrap: "wrap", marginTop: 2 }}>
-                  {dayRows.slice(0, 3).map(r => {
-                    const sc = STATUS_COLORS[r.status];
-                    return <div key={r.id} style={{ width: 6, height: 6, borderRadius: "50%", background: sc.border, flexShrink: 0 }} />;
-                  })}
+                  {dayRows.slice(0, 3).map(r => <div key={r.id} style={{ width: 6, height: 6, borderRadius: "50%", background: STATUS_COLORS[r.status].border }} />)}
                   {dayRows.length > 3 && <span style={{ fontSize: 7, color: "#7c3aed" }}>+{dayRows.length - 3}</span>}
                 </div>
               )}
@@ -372,36 +312,29 @@ function CalendarView({ rows, mes, onSelectDay, isMobile }: { rows: Row[]; mes: 
 // ─── DayPanel ──────────────────────────────────────────────────────────────
 function DayPanel({ day, mes, rows, onClose, isMobile }: { day: number; mes: number; rows: Row[]; onClose: () => void; isMobile: boolean }) {
   return (
-    <div style={{ marginTop: 16, background: "linear-gradient(135deg, #1a0d3a, #2d1b69)", border: "1px solid #4a2a8a", borderRadius: 14, padding: isMobile ? "14px 12px" : "18px 20px", animation: "glow 4s ease-in-out infinite" }}>
+    <div style={{ marginTop: 16, background: "linear-gradient(135deg,#1a0d3a,#2d1b69)", border: "1px solid #4a2a8a", borderRadius: 14, padding: isMobile ? "14px 12px" : "18px 20px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div style={{ fontFamily: "'Cinzel', serif", fontSize: isMobile ? 12 : 14, fontWeight: 700, color: "#c084fc", letterSpacing: 2 }}>
+        <div style={{ fontFamily: "'Cinzel', serif", fontSize: isMobile ? 12 : 14, fontWeight: 700, color: "#c084fc" }}>
           📅 {day} de {MONTHS[mes]} — {rows.length} postagem{rows.length !== 1 ? "s" : ""}
         </div>
-        <button onClick={onClose} style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: "#5a3a8a", cursor: "pointer", padding: "6px 12px", fontFamily: "'Cinzel', serif", fontSize: 12 }}>✕ Fechar</button>
+        <button onClick={onClose} style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: "#5a3a8a", cursor: "pointer", padding: "6px 12px", fontFamily: "'Cinzel', serif", fontSize: 12 }}>✕</button>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {rows.map(r => {
           const sc = STATUS_COLORS[r.status];
           const urgency = getUrgency(r.data, r.status);
           const us = urgency ? URGENCY_STYLES[urgency] : null;
-          const icon = REDE_ICONS[r.rede];
           return (
             <div key={r.id} style={{ background: sc.rowBg, border: `1px solid ${us ? us.border : sc.border}`, borderLeft: `4px solid ${us ? us.border : sc.border}`, borderRadius: 8, padding: "10px 14px", display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: "8px 16px" }}>
               <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>POSTAGEM</div><div style={{ fontSize: 12, color: "#e2d0ff" }}>{r.postagem}</div></div>
               <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>TEMA</div><div style={{ fontSize: 12, color: "#e2d0ff" }}>{r.tema || "—"}</div></div>
-              <div>
-                <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>REDE</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  {icon && <img src={icon} alt={r.rede} style={{ width: 14, height: 14, objectFit: "contain" }} />}
-                  <span style={{ fontSize: 12, color: "#e2d0ff" }}>{r.rede || "—"}</span>
-                </div>
-              </div>
+              <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>REDE</div><div style={{ fontSize: 12, color: "#e2d0ff" }}>{REDE_ICONS[r.rede] || ""} {r.rede || "—"}</div></div>
               <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>FORMATO</div><div style={{ fontSize: 12, color: "#e2d0ff" }}>{r.formato || "—"}</div></div>
               <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>RESPONSÁVEL</div><div style={{ fontSize: 12, color: "#e2d0ff" }}>{r.responsavel || "—"}</div></div>
               <div>
                 <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>STATUS</div>
                 <span style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.border}`, borderRadius: 5, padding: "2px 7px", fontSize: 10, fontFamily: "'Cinzel', serif", fontWeight: 700 }}>{r.status}</span>
-                {us && <span style={{ marginLeft: 6, background: us.badgeBg, color: us.badgeColor, fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel', serif", borderRadius: 4, padding: "1px 5px", letterSpacing: 1, animation: us.anim }}>{us.badge}</span>}
+                {us && <span style={{ marginLeft: 6, background: us.badgeBg, color: us.badgeColor, fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel', serif", borderRadius: 4, padding: "1px 5px", animation: us.anim }}>{us.badge}</span>}
               </div>
             </div>
           );
@@ -411,15 +344,15 @@ function DayPanel({ day, mes, rows, onClose, isMobile }: { day: number; mes: num
   );
 }
 
-// ─── TrafegoView ───────────────────────────────────────────────────────────
+// ─── Tráfego ───────────────────────────────────────────────────────────────
 const CAMPAIGNS = [
-  { id: 1, nome: "Tráfego — Anunciantes do Instagram", periodo: "11 abr → 15 abr 2026", vizTotal: 26259, vizUnicos: 24385, resultado: 307, tipoResultado: "cliques no link",   best: false },
-  { id: 2, nome: "Post Mayou — 3ª rodada",             periodo: "9 mai → 13 mai 2026",   vizTotal: 17846, vizUnicos: 14477, resultado: 556, tipoResultado: "visitas à página",  best: true  },
-  { id: 3, nome: "Post Gio 2 — 2ª rodada",             periodo: "14 mai → 17 mai 2026",  vizTotal: 13935, vizUnicos: 11389, resultado: 191, tipoResultado: "visitas à página",  best: false },
-  { id: 4, nome: "Post Mayou — 1ª rodada",             periodo: "5 abr → 9 abr 2026",    vizTotal: 10537, vizUnicos: 8002,  resultado: 182, tipoResultado: "visitas à página",  best: false },
-  { id: 5, nome: "Post Gio 3 — 3ª rodada",             periodo: "20 mai → 23 mai 2026",  vizTotal: 9341,  vizUnicos: 7902,  resultado: 134, tipoResultado: "visitas à página",  best: false },
-  { id: 6, nome: "Post Gio 1 — 1ª rodada",             periodo: "21 abr → 24 abr 2026",  vizTotal: 7784,  vizUnicos: 6557,  resultado: 96,  tipoResultado: "visitas à página",  best: false },
-  { id: 7, nome: "Post Mayou — 2ª rodada",             periodo: "26 abr → 30 abr 2026",  vizTotal: 1049,  vizUnicos: 951,   resultado: 9,   tipoResultado: "visitas à página",  best: false },
+  { id: 1, nome: "Tráfego — Anunciantes do Instagram", periodo: "11 abr → 15 abr 2026", vizTotal: 26259, vizUnicos: 24385, resultado: 307, tipoResultado: "cliques no link",  best: false },
+  { id: 2, nome: "Post Mayou — 3ª rodada",             periodo: "9 mai → 13 mai 2026",   vizTotal: 17846, vizUnicos: 14477, resultado: 556, tipoResultado: "visitas à página", best: true  },
+  { id: 3, nome: "Post Gio 2 — 2ª rodada",             periodo: "14 mai → 17 mai 2026",  vizTotal: 13935, vizUnicos: 11389, resultado: 191, tipoResultado: "visitas à página", best: false },
+  { id: 4, nome: "Post Mayou — 1ª rodada",             periodo: "5 abr → 9 abr 2026",    vizTotal: 10537, vizUnicos: 8002,  resultado: 182, tipoResultado: "visitas à página", best: false },
+  { id: 5, nome: "Post Gio 3 — 3ª rodada",             periodo: "20 mai → 23 mai 2026",  vizTotal: 9341,  vizUnicos: 7902,  resultado: 134, tipoResultado: "visitas à página", best: false },
+  { id: 6, nome: "Post Gio 1 — 1ª rodada",             periodo: "21 abr → 24 abr 2026",  vizTotal: 7784,  vizUnicos: 6557,  resultado: 96,  tipoResultado: "visitas à página", best: false },
+  { id: 7, nome: "Post Mayou — 2ª rodada",             periodo: "26 abr → 30 abr 2026",  vizTotal: 1049,  vizUnicos: 951,   resultado: 9,   tipoResultado: "visitas à página", best: false },
 ];
 
 const AUDIENCE_DATA = [
@@ -431,144 +364,226 @@ const AUDIENCE_DATA = [
   { faixa: "65+",   homens: 1,  mulheres: 0,   total: 1  },
 ];
 
-const CHART_DATA = CAMPAIGNS.map(c => ({
-  name: c.nome.length > 14 ? c.nome.slice(0, 14) + "…" : c.nome,
-  vizTotal: c.vizTotal,
-  vizUnicos: c.vizUnicos,
-}));
-
 const fmtNum = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
 
 function TrafegoView({ isMobile }: { isMobile: boolean }) {
-  const totalViz     = CAMPAIGNS.reduce((s, c) => s + c.vizTotal, 0);
-  const totalUnicos  = CAMPAIGNS.reduce((s, c) => s + c.vizUnicos, 0);
-  const totalInter   = 14300;
-  const totalVisitas = 1832;
+  const totalViz    = CAMPAIGNS.reduce((s, c) => s + c.vizTotal, 0);
+  const totalUnicos = CAMPAIGNS.reduce((s, c) => s + c.vizUnicos, 0);
+  const chartData   = CAMPAIGNS.map(c => ({ name: c.nome.slice(0, 14) + "…", vizTotal: c.vizTotal, vizUnicos: c.vizUnicos }));
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     return (
       <div style={{ background: "#1a0d3a", border: "1px solid #4a2a8a", borderRadius: 8, padding: "10px 14px" }}>
         <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#7c3aed", marginBottom: 6 }}>{label}</div>
-        {payload.map((p: any) => (
-          <div key={p.name} style={{ fontSize: 11, color: p.color, fontFamily: "'Lato', sans-serif" }}>
-            {p.name}: <b>{p.value.toLocaleString("pt-BR")}</b>
-          </div>
-        ))}
+        {payload.map((p: any) => <div key={p.name} style={{ fontSize: 11, color: p.color, fontFamily: "'Lato', sans-serif" }}>{p.name}: <b>{p.value.toLocaleString("pt-BR")}</b></div>)}
       </div>
     );
   };
 
   return (
     <div>
-      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, letterSpacing: 3, textTransform: "uppercase", color: "#5a3a8a", marginBottom: 16 }}>✦ Visão Geral — 90 dias · 7 campanhas</div>
-
-      {/* KPI cards */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
+      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, letterSpacing: 3, color: "#5a3a8a", marginBottom: 16 }}>✦ VISÃO GERAL — 90 DIAS · 7 CAMPANHAS</div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
         {[
-          { label: "Visualizações", val: fmtNum(totalViz),     sub: "impressões totais",    color: "#c084fc" },
-          { label: "Alcance",       val: fmtNum(totalUnicos),  sub: "pessoas únicas",        color: "#a78bfa" },
-          { label: "Interações",    val: fmtNum(totalInter),   sub: "curtidas, comentários", color: "#e879f9" },
-          { label: "Visitas",       val: fmtNum(totalVisitas), sub: "acessos gerados",       color: "#6ee7b7" },
+          { label: "Visualizações", val: fmtNum(totalViz),    color: "#c084fc" },
+          { label: "Alcance",       val: fmtNum(totalUnicos), color: "#a78bfa" },
+          { label: "Interações",    val: "14.3k",             color: "#e879f9" },
+          { label: "Visitas",       val: "1.8k",              color: "#6ee7b7" },
         ].map(k => (
-          <div key={k.label} style={{ background: "linear-gradient(135deg, #1a0d3a, #110828)", border: "1px solid #4a2a8a", borderTop: `2px solid ${k.color}`, borderRadius: 12, padding: isMobile ? "14px 12px" : "18px 20px", animation: "glow 3s ease-in-out infinite" }}>
+          <div key={k.label} style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: "1px solid #4a2a8a", borderTop: `2px solid ${k.color}`, borderRadius: 12, padding: isMobile ? "14px 12px" : "18px 20px" }}>
             <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#a78bfa", marginBottom: 6, letterSpacing: 1 }}>{k.label}</div>
-            <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 900, color: k.color, fontFamily: "'Cinzel', serif", letterSpacing: -1 }}>{k.val}</div>
-            <div style={{ fontSize: 9, color: "#9d8bbf", marginTop: 4, fontFamily: "'Lato', sans-serif" }}>{k.sub}</div>
+            <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 900, color: k.color, fontFamily: "'Cinzel', serif" }}>{k.val}</div>
           </div>
         ))}
       </div>
-
-      {/* Gráfico + Público — empilha no mobile */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 320px", gap: 16, marginBottom: 24 }}>
-        <div style={{ background: "linear-gradient(135deg, #1a0d3a, #110828)", border: "1px solid #4a2a8a", borderRadius: 14, padding: "20px 16px", animation: "glow 4s ease-in-out infinite" }}>
-          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c084fc", marginBottom: 16, letterSpacing: 1 }}>✦ Visualizações por Campanha</div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 300px", gap: 16, marginBottom: 24 }}>
+        <div style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: "1px solid #4a2a8a", borderRadius: 14, padding: "20px 16px" }}>
+          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c084fc", marginBottom: 16 }}>✦ Visualizações por Campanha</div>
           <div style={{ height: isMobile ? 180 : 220 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={CHART_DATA} margin={{ top: 4, right: 4, bottom: isMobile ? 50 : 40, left: 0 }}>
-                <XAxis dataKey="name" tick={{ fill: "#5a3a8a", fontSize: isMobile ? 7 : 9, fontFamily: "'Lato', sans-serif" }} angle={-35} textAnchor="end" interval={0} />
-                <YAxis tick={{ fill: "#5a3a8a", fontSize: 9, fontFamily: "'Lato', sans-serif" }} tickFormatter={v => v >= 1000 ? (v / 1000).toFixed(0) + "k" : v} width={32} />
+              <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 50, left: 0 }}>
+                <XAxis dataKey="name" tick={{ fill: "#5a3a8a", fontSize: 8 }} angle={-35} textAnchor="end" interval={0} />
+                <YAxis tick={{ fill: "#5a3a8a", fontSize: 9 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+"k" : v} width={32} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="vizTotal" name="Visualizações" radius={[4, 4, 0, 0]}>
-                  {CHART_DATA.map((_, i) => <Cell key={i} fill={`rgba(162,89,255,${0.85 - i * 0.08})`} />)}
+                <Bar dataKey="vizTotal" name="Visualizações" radius={[4,4,0,0]}>
+                  {chartData.map((_, i) => <Cell key={i} fill={`rgba(162,89,255,${0.85-i*0.08})`} />)}
                 </Bar>
-                <Bar dataKey="vizUnicos" name="Visualizadores" radius={[4, 4, 0, 0]}>
-                  {CHART_DATA.map((_, i) => <Cell key={i} fill={`rgba(192,132,252,${0.5 - i * 0.04})`} />)}
+                <Bar dataKey="vizUnicos" name="Visualizadores" radius={[4,4,0,0]}>
+                  {chartData.map((_, i) => <Cell key={i} fill={`rgba(192,132,252,${0.5-i*0.04})`} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
-
-        <div style={{ background: "linear-gradient(135deg, #1a0d3a, #110828)", border: "1px solid #4a2a8a", borderRadius: 14, padding: "20px 16px", animation: "glow 4s ease-in-out infinite" }}>
-          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c084fc", marginBottom: 4, letterSpacing: 1 }}>✦ Público — 30 dias</div>
-          <div style={{ fontSize: 10, color: "#5a3a8a", fontFamily: "'Lato', sans-serif", marginBottom: 16 }}>8,1 mil interações</div>
+        <div style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: "1px solid #4a2a8a", borderRadius: 14, padding: "20px 16px" }}>
+          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c084fc", marginBottom: 16 }}>✦ Público — 30 dias</div>
           {AUDIENCE_DATA.map(a => (
             <div key={a.faixa} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a", width: 38, flexShrink: 0 }}>{a.faixa}</div>
+              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a", width: 38 }}>{a.faixa}</div>
               <div style={{ flex: 1, height: 18, background: "#0d0720", borderRadius: 4, overflow: "hidden", display: "flex" }}>
-                <div style={{ width: `${a.homens}%`, background: "rgba(162,89,255,0.8)", height: "100%", borderRadius: "4px 0 0 4px" }} />
+                <div style={{ width: `${a.homens}%`, background: "rgba(162,89,255,0.8)", height: "100%" }} />
                 <div style={{ width: `${a.mulheres}%`, background: "rgba(240,171,252,0.65)", height: "100%" }} />
               </div>
-              <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 10, color: "#5a3a8a", width: 28, textAlign: "right" }}>{a.total}%</div>
+              <div style={{ fontSize: 10, color: "#5a3a8a", width: 28, textAlign: "right" }}>{a.total}%</div>
             </div>
           ))}
-          <div style={{ display: "flex", gap: 14, marginTop: 12 }}>
-            {[["rgba(162,89,255,0.8)", "Homens"], ["rgba(240,171,252,0.65)", "Mulheres"]].map(([bg, label]) => (
-              <div key={label as string} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <div style={{ width: 10, height: 10, borderRadius: 2, background: bg as string }} />
-                <span style={{ fontSize: 10, color: "#5a3a8a", fontFamily: "'Lato', sans-serif" }}>{label}</span>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
-
-      {/* Campanhas individuais */}
-      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, letterSpacing: 3, textTransform: "uppercase", color: "#5a3a8a", marginBottom: 16 }}>✦ Campanhas Individuais</div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit,minmax(280px,1fr))", gap: 14 }}>
         {CAMPAIGNS.map((c, idx) => (
-          <div key={c.id} style={{ background: "linear-gradient(135deg, #1a0d3a, #110828)", border: c.best ? "1px solid rgba(162,89,255,0.5)" : "1px solid #2d1b69", borderRadius: 12, padding: "16px 18px", position: "relative" }}>
-            {c.best && <div style={{ position: "absolute", top: 12, right: 12, background: "rgba(162,89,255,0.15)", border: "1px solid rgba(162,89,255,0.4)", color: "#c084fc", fontFamily: "'Cinzel', serif", fontSize: 8, letterSpacing: 1, textTransform: "uppercase", padding: "3px 9px", borderRadius: 20 }}>✦ Mais visitas</div>}
-            <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#5a3a8a", marginBottom: 6, letterSpacing: 1 }}>Campanha {String(idx + 1).padStart(2, "0")}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#e2d0ff", marginBottom: 3, lineHeight: 1.3, paddingRight: c.best ? 70 : 0, fontFamily: "'Cinzel', serif" }}>{c.nome}</div>
+          <div key={c.id} style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: c.best ? "1px solid rgba(162,89,255,0.5)" : "1px solid #2d1b69", borderRadius: 12, padding: "16px 18px", position: "relative" }}>
+            {c.best && <div style={{ position: "absolute", top: 12, right: 12, background: "rgba(162,89,255,0.15)", border: "1px solid rgba(162,89,255,0.4)", color: "#c084fc", fontFamily: "'Cinzel', serif", fontSize: 8, padding: "3px 9px", borderRadius: 20 }}>✦ Mais visitas</div>}
+            <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#5a3a8a", marginBottom: 4 }}>Campanha {String(idx+1).padStart(2,"0")}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#e2d0ff", marginBottom: 3, fontFamily: "'Cinzel', serif", paddingRight: c.best ? 70 : 0 }}>{c.nome}</div>
             <div style={{ fontSize: 10, color: "#5a3a8a", marginBottom: 14, fontFamily: "'Lato', sans-serif" }}>{c.periodo}</div>
             <div style={{ borderTop: "1px solid #2d1b69", paddingTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 3 }}>VISUALIZAÇÕES</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#e2d0ff" }}>{c.vizTotal.toLocaleString("pt-BR")}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 3 }}>VISUALIZADORES</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#e2d0ff" }}>{c.vizUnicos.toLocaleString("pt-BR")}</div>
-              </div>
-              <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #2d1b69", paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 3 }}>RESULTADO</div>
-                  <div style={{ fontSize: 22, fontWeight: 900, color: "#c084fc", fontFamily: "'Cinzel', serif" }}>{c.resultado}</div>
-                  <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Lato', sans-serif" }}>{c.tipoResultado}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 3 }}>TAXA</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa", fontFamily: "'Cinzel', serif" }}>{((c.resultado / c.vizTotal) * 100).toFixed(2)}%</div>
-                  <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Lato', sans-serif" }}>conversão</div>
-                </div>
+              <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 3 }}>VISUALIZAÇÕES</div><div style={{ fontSize: 18, fontWeight: 700, color: "#e2d0ff" }}>{c.vizTotal.toLocaleString("pt-BR")}</div></div>
+              <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 3 }}>VISUALIZADORES</div><div style={{ fontSize: 18, fontWeight: 700, color: "#e2d0ff" }}>{c.vizUnicos.toLocaleString("pt-BR")}</div></div>
+              <div style={{ gridColumn: "1/-1", borderTop: "1px solid #2d1b69", paddingTop: 10, display: "flex", justifyContent: "space-between" }}>
+                <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 3 }}>RESULTADO</div><div style={{ fontSize: 22, fontWeight: 900, color: "#c084fc", fontFamily: "'Cinzel', serif" }}>{c.resultado}</div><div style={{ fontSize: 9, color: "#5a3a8a" }}>{c.tipoResultado}</div></div>
+                <div style={{ textAlign: "right" }}><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 3 }}>TAXA</div><div style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa", fontFamily: "'Cinzel', serif" }}>{((c.resultado/c.vizTotal)*100).toFixed(2)}%</div><div style={{ fontSize: 9, color: "#5a3a8a" }}>conversão</div></div>
               </div>
             </div>
           </div>
         ))}
       </div>
-      <div style={{ marginTop: 32, textAlign: "center", color: "#3d1b69", fontSize: 10, fontFamily: "'Cinzel', serif", letterSpacing: 2 }}>
-        Gerado em 24/05/2026 · Meta Ads Manager · 7 Campanhas
+    </div>
+  );
+}
+
+// ─── LeadsView ─────────────────────────────────────────────────────────────
+const LEAD_STATUS_OPTIONS = ["Novo lead","Em contato","Mesa alocada","Desistiu","Lista de espera"];
+const LEAD_STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  "Novo lead":      { bg: "#3d2068", text: "#c9a0f5", border: "#6b3fa0" },
+  "Em contato":     { bg: "#2a1a5e", text: "#93c5fd", border: "#3b5bdb" },
+  "Mesa alocada":   { bg: "#1a3a1a", text: "#86efac", border: "#16a34a" },
+  "Desistiu":       { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626" },
+  "Lista de espera":{ bg: "#1e3a5f", text: "#6ee7b7", border: "#059669" },
+};
+
+function LeadsView({ isMobile }: { isMobile: boolean }) {
+  const [leads, setLeads]         = useState<Lead[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState("");
+  const [filterStatus, setFilterStatus] = useState("Todos");
+  const [expanded, setExpanded]   = useState<string | null>(null);
+
+  useEffect(() => {
+    dbLoadLeads().then(setLeads).catch(console.error).finally(() => setLoading(false));
+  }, []);
+
+  const updateStatus = async (id: string, status: string) => {
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l));
+    await dbUpdateLeadStatus(id, status).catch(console.error);
+  };
+
+  const filtered = leads.filter(l => {
+    if (filterStatus !== "Todos" && l.status !== filterStatus) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return l.nome?.toLowerCase().includes(q) || l.whatsapp_discord?.toLowerCase().includes(q) || l.sistemas_desejados?.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const byStatus = LEAD_STATUS_OPTIONS.reduce((acc, s) => {
+    acc[s] = leads.filter(l => l.status === s).length;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const selectStyle: React.CSSProperties = { background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 8, padding: "8px 10px", fontFamily: "'Cinzel', serif", fontSize: 12, cursor: "pointer", outline: "none" };
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(5,1fr)", gap: 8, marginBottom: 20 }}>
+        {LEAD_STATUS_OPTIONS.map(s => {
+          const c = LEAD_STATUS_COLORS[s];
+          return (
+            <div key={s} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center", cursor: "pointer" }} onClick={() => setFilterStatus(filterStatus === s ? "Todos" : s)}>
+              <div style={{ fontSize: 20, fontWeight: 900, color: c.text, fontFamily: "'Cinzel', serif" }}>{byStatus[s] ?? 0}</div>
+              <div style={{ fontSize: 8, color: c.text, opacity: 0.8, fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>{s}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Buscar por nome, contato ou sistema..."
+          style={{ ...selectStyle, flex: 1, minWidth: 200 }} />
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
+          <option value="Todos">Todos os status</option>
+          {LEAD_STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
+        </select>
+        <button onClick={() => { setLoading(true); dbLoadLeads().then(setLeads).finally(() => setLoading(false)); }}
+          style={{ background: "#1a0d3a", color: "#c084fc", border: "1px solid #4a2a8a", borderRadius: 8, padding: "8px 14px", fontFamily: "'Cinzel', serif", fontSize: 12, cursor: "pointer" }}>⟳</button>
+      </div>
+
+      {loading && <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
+
+      {!loading && filtered.length === 0 && (
+        <div style={{ textAlign: "center", padding: 40, color: "#5a3a8a", fontFamily: "'Cinzel', serif", fontSize: 13 }}>Nenhum lead encontrado.</div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {filtered.map(lead => {
+          const sc = LEAD_STATUS_COLORS[lead.status] ?? LEAD_STATUS_COLORS["Novo lead"];
+          const isOpen = expanded === lead.id;
+          const date = lead.created_at ? new Date(lead.created_at).toLocaleDateString("pt-BR") : "—";
+          const origem = lead.notas?.replace("Origem: ", "") ?? "—";
+          return (
+            <div key={lead.id} style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: `1px solid ${sc.border}`, borderLeft: `4px solid ${sc.border}`, borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", cursor: "pointer" }} onClick={() => setExpanded(isOpen ? null : lead.id)}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 700, color: "#e2d0ff", marginBottom: 2 }}>{lead.nome || "—"}</div>
+                  <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 11, color: "#7c3aed" }}>{lead.whatsapp_discord || "—"} · {date}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <select value={lead.status} onChange={e => { e.stopPropagation(); updateStatus(lead.id, e.target.value); }}
+                    onClick={e => e.stopPropagation()}
+                    style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.border}`, borderRadius: 6, padding: "5px 8px", fontSize: 11, fontFamily: "'Cinzel', serif", fontWeight: 700, cursor: "pointer", outline: "none" }}>
+                    {LEAD_STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                  <span style={{ color: "#5a3a8a", fontSize: 14 }}>{isOpen ? "▲" : "▼"}</span>
+                </div>
+              </div>
+
+              {isOpen && (
+                <div style={{ padding: "0 16px 16px", borderTop: "1px solid #2d1b69", paddingTop: 14 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3,1fr)", gap: "10px 20px" }}>
+                    {[
+                      { label: "Idade",            val: lead.idade },
+                      { label: "Tempo de RPG",     val: lead.tempo_rpg },
+                      { label: "Melhor período",   val: lead.melhor_periodo },
+                      { label: "Melhor dia",       val: lead.melhor_dia },
+                      { label: "Sistemas jogados", val: lead.sistemas_jogados },
+                      { label: "Sistemas desejados", val: lead.sistemas_desejados },
+                      { label: "Pronto pra ingressar", val: lead.pronto_ingressar },
+                      { label: "Código de desconto",   val: lead.codigo_desconto || "—" },
+                      { label: "Origem",               val: origem },
+                    ].map(({ label, val }) => (
+                      <div key={label}>
+                        <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 2 }}>{label.toUpperCase()}</div>
+                        <div style={{ fontSize: 12, color: "#e2d0ff", fontFamily: "'Lato', sans-serif" }}>{val || "—"}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: 24, textAlign: "center", fontSize: 10, color: "#3d1b69", fontFamily: "'Cinzel', serif", letterSpacing: 2 }}>
+        {leads.length} lead{leads.length !== 1 ? "s" : ""} no total
       </div>
     </div>
   );
 }
 
-// ─── App ───────────────────────────────────────────────────────────────────
-export default function App() {
+// ─── Dashboard ─────────────────────────────────────────────────────────────
+function Dashboard({ onVoltar }: { onVoltar: () => void }) {
   const isMobile = useIsMobile();
-
   const [rows, setRows]             = useState<Row[]>([]);
   const [mes, setMes]               = useState(new Date().getMonth());
   const [filter, setFilter]         = useState("Todos");
@@ -576,7 +591,7 @@ export default function App() {
   const [filterDataInicio, setFilterDataInicio] = useState("");
   const [filterDataFim, setFilterDataFim]       = useState("");
   const [loading, setLoading]       = useState(true);
-  const [syncStatus, setSyncStatus] = useState<"ok" | "saving" | "error">("ok");
+  const [syncStatus, setSyncStatus] = useState<"ok"|"saving"|"error">("ok");
   const [viewMode, setViewMode]     = useState<ViewMode>("tabela");
   const [selectedDay, setSelectedDay] = useState<{ day: number; rows: Row[] } | null>(null);
   const [appTab, setAppTab]         = useState<AppTab>("calendario");
@@ -594,13 +609,9 @@ export default function App() {
       const data = await dbLoad(m);
       setRows(prev => {
         const pending = pendingUpserts.current;
-        const merged = data.map(serverRow => {
-          if (pending.has(serverRow.id)) { const local = prev.find(r => r.id === serverRow.id); return local ?? serverRow; }
-          return serverRow;
-        });
+        const merged = data.map(sr => pending.has(sr.id) ? (prev.find(r => r.id === sr.id) ?? sr) : sr);
         const serverIds = new Set(data.map(r => r.id));
-        const localOnly = prev.filter(r => !serverIds.has(r.id));
-        const result = [...merged, ...localOnly];
+        const result = [...merged, ...prev.filter(r => !serverIds.has(r.id))];
         rowsRef.current = result;
         return result;
       });
@@ -609,7 +620,6 @@ export default function App() {
   }, []);
 
   useEffect(() => { setSelectedDay(null); loadRows(mes); }, [mes, loadRows]);
-
   useEffect(() => {
     const interval = setInterval(() => {
       const tag = document.activeElement?.tagName;
@@ -648,7 +658,7 @@ export default function App() {
 
   const duplicateRow = async (source: Row) => {
     const row: Row = { ...source, id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, postagem: `${source.postagem} (cópia)`, status: "Planejado" };
-    setRowsSafe(prev => { const idx = prev.findIndex(r => r.id === source.id); const next = [...prev]; next.splice(idx + 1, 0, row); return next; });
+    setRowsSafe(prev => { const idx = prev.findIndex(r => r.id === source.id); const next = [...prev]; next.splice(idx+1, 0, row); return next; });
     try { await dbUpsert(row); } catch { setSyncStatus("error"); }
   };
 
@@ -661,7 +671,6 @@ export default function App() {
 
   const dInicio = parseDateBR(filterDataInicio);
   const dFim    = parseDateBR(filterDataFim);
-
   const filtered = rows
     .filter(r => {
       if (filter !== "Todos" && r.status !== filter) return false;
@@ -671,133 +680,57 @@ export default function App() {
       if (dFim    && (!d || d > dFim))   return false;
       return true;
     })
-    .sort((a, b) => {
-      const da = parseDateBR(a.data);
-      const db = parseDateBR(b.data);
-      if (!da && !db) return 0;
-      if (!da) return 1;
-      if (!db) return -1;
-      return da.getTime() - db.getTime();
-    });
+    .sort((a, b) => { const da = parseDateBR(a.data); const db = parseDateBR(b.data); if (!da && !db) return 0; if (!da) return 1; if (!db) return -1; return da.getTime() - db.getTime(); });
 
-  const temFiltroData = filterDataInicio !== "" || filterDataFim !== "";
   const urgentCount = rows.filter(r => getUrgency(r.data, r.status) !== null).length;
-  const syncLabel = syncStatus === "saving" ? "Salvando..." : syncStatus === "error" ? "⚠ Erro" : "✓ Sync";
-  const syncColor = syncStatus === "saving" ? "#c084fc" : syncStatus === "error" ? "#f87171" : "#6ee7b7";
-
-  const selectStyle: React.CSSProperties = {
-    background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a",
-    borderRadius: 8, padding: "9px 10px", fontFamily: "'Cinzel', serif",
-    fontSize: 13, cursor: "pointer", outline: "none", width: "100%",
-  };
-
-  const handleSelectDay = (dayRows: Row[], day: number) => {
-    setSelectedDay(prev => prev?.day === day ? null : { day, rows: dayRows });
-  };
+  const syncColor   = syncStatus === "saving" ? "#c084fc" : syncStatus === "error" ? "#f87171" : "#6ee7b7";
+  const syncLabel   = syncStatus === "saving" ? "Salvando..." : syncStatus === "error" ? "⚠ Erro" : "✓ Sync";
+  const selectStyle: React.CSSProperties = { background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 8, padding: "9px 10px", fontFamily: "'Cinzel', serif", fontSize: 13, cursor: "pointer", outline: "none", width: "100%" };
 
   return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0d0720 0%, #1a0d3a 40%, #0d0720 100%)", fontFamily: "'Lato', sans-serif", color: "#e2d0ff", padding: isMobile ? "14px 10px" : "24px 16px" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Lato:wght@300;400;700&display=swap');
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #0d0720; }
-        ::-webkit-scrollbar-thumb { background: #4a2a8a; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #7c3aed; }
-        @keyframes float        { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-        @keyframes glow         { 0%,100%{box-shadow:0 0 20px #7c3aed44} 50%{box-shadow:0 0 40px #7c3aed88} }
-        @keyframes blink        { 0%,100%{opacity:1} 50%{opacity:0.4} }
-        @keyframes spin         { to{transform:rotate(360deg)} }
-        @keyframes pulse-red    { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.5)} 50%{box-shadow:0 0 0 4px rgba(239,68,68,0)} }
-        @keyframes pulse-yellow { 0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.5)} 50%{box-shadow:0 0 0 4px rgba(245,158,11,0)} }
-        input::placeholder { color: #5a3a8a; }
-        select, button, input { -webkit-tap-highlight-color: transparent; }
-      `}</style>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#0d0720 0%,#1a0d3a 40%,#0d0720 100%)", color: "#e2d0ff", padding: isMobile ? "14px 10px" : "24px 16px" }}>
 
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 20, marginBottom: 18, borderBottom: "2px solid #4a2a8a", paddingBottom: 14, flexWrap: "wrap" }}>
-        <img src="/icons/criandoxp.png" alt="Criando XP" style={{ width: isMobile ? 48 : 80, height: isMobile ? 48 : 80, objectFit: "contain", animation: "float 4s ease-in-out infinite" }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "'Cinzel', serif", fontSize: isMobile ? 18 : 24, fontWeight: 900, background: "linear-gradient(90deg, #c084fc, #818cf8, #a855f7)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>Criando XP</div>
+        <div style={{ width: isMobile ? 48 : 80, height: isMobile ? 48 : 80, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#c084fc)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: isMobile ? 24 : 36, animation: "float 4s ease-in-out infinite", flexShrink: 0 }}>🎲</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: "'Cinzel', serif", fontSize: isMobile ? 18 : 24, fontWeight: 900, background: "linear-gradient(90deg,#c084fc,#818cf8,#a855f7)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>Criando XP</div>
           <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#7c3aed", letterSpacing: 3, textTransform: "uppercase" }}>
-            {appTab === "calendario" ? "Calendário de Postagem" : "Tráfego Pago · Meta Ads"}
+            {appTab === "calendario" ? "Calendário de Postagem" : appTab === "trafego" ? "Tráfego Pago · Meta Ads" : "Leads & Clientes"}
           </div>
         </div>
-
-        {/* tabs de aba — direita no desktop, linha separada no mobile */}
-        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-end" : "center", gap: 8, marginLeft: isMobile ? 0 : "auto", width: isMobile ? "100%" : "auto" }}>
+        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-end" : "center", gap: 8, width: isMobile ? "100%" : "auto" }}>
           {appTab === "calendario" && urgentCount > 0 && (
-            <span style={{ background: "#ef4444", color: "#fff", borderRadius: 20, padding: "4px 10px", fontSize: 11, fontFamily: "'Cinzel', serif", fontWeight: 700, animation: "pulse-red 1s ease-in-out infinite", letterSpacing: 1, alignSelf: "flex-start" }}>
-              ⚡ {urgentCount} urgente{urgentCount > 1 ? "s" : ""}
-            </span>
+            <span style={{ background: "#ef4444", color: "#fff", borderRadius: 20, padding: "4px 10px", fontSize: 11, fontFamily: "'Cinzel', serif", animation: "pulse-red 1s ease-in-out infinite" }}>⚡ {urgentCount} urgente{urgentCount > 1 ? "s" : ""}</span>
           )}
-          {appTab === "calendario" && (
-            <span style={{ fontSize: 10, color: syncColor, animation: syncStatus === "saving" ? "blink 1s infinite" : "none" }}>{syncLabel}</span>
-          )}
+          {appTab === "calendario" && <span style={{ fontSize: 10, color: syncColor, animation: syncStatus === "saving" ? "blink 1s infinite" : "none" }}>{syncLabel}</span>}
+          <button onClick={onVoltar} style={{ background: "transparent", border: "1px solid #4a2a8a", color: "#7c3aed", borderRadius: 8, padding: "6px 14px", fontFamily: "'Cinzel', serif", fontSize: 11, cursor: "pointer", letterSpacing: 1 }}>← Voltar</button>
           <div style={{ display: "flex", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, overflow: "hidden", width: isMobile ? "100%" : "auto" }}>
-            {([["calendario", "📅 Calendário"], ["trafego", "📊 Tráfego"]] as [AppTab, string][]).map(([tab, label]) => (
+            {([["calendario","📅"], ["trafego","📊"], ["leads","👥"]] as [AppTab,string][]).map(([tab, icon]) => (
               <button key={tab} onClick={() => setAppTab(tab)}
-                style={{ flex: isMobile ? 1 : undefined, background: appTab === tab ? "linear-gradient(135deg, #4a2a8a, #7c3aed)" : "transparent", color: appTab === tab ? "#fff" : "#5a3a8a", border: "none", padding: isMobile ? "10px 0" : "8px 16px", fontFamily: "'Cinzel', serif", fontSize: isMobile ? 12 : 11, fontWeight: 700, cursor: "pointer", letterSpacing: 1, transition: "all 0.2s" }}>
-                {label}
+                style={{ flex: isMobile ? 1 : undefined, background: appTab === tab ? "linear-gradient(135deg,#4a2a8a,#7c3aed)" : "transparent", color: appTab === tab ? "#fff" : "#5a3a8a", border: "none", padding: isMobile ? "10px 0" : "8px 14px", fontFamily: "'Cinzel', serif", fontSize: isMobile ? 12 : 11, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>
+                {icon}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* ── CALENDÁRIO ── */}
+      {/* CALENDÁRIO */}
       {appTab === "calendario" && (
         <>
-          {/* Filtros */}
           <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-            <select value={mes} onChange={e => setMes(Number(e.target.value))} style={selectStyle}>
-              {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-            </select>
-            {!isMobile && (
-              <>
-                <select value={filterRede} onChange={e => setFilterRede(e.target.value)} style={{ ...selectStyle, width: "auto" }}>
-                  <option value="Todos">Todas as Redes</option>
-                  {REDE_OPTIONS.map(r => <option key={r}>{r}</option>)}
-                </select>
-                <select value={filter} onChange={e => setFilter(e.target.value)} style={{ ...selectStyle, width: "auto" }}>
-                  <option value="Todos">Todos os Status</option>
-                  {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-                </select>
-              </>
-            )}
-            {isMobile && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <select value={filterRede} onChange={e => setFilterRede(e.target.value)} style={selectStyle}>
-                  <option value="Todos">Todas as Redes</option>
-                  {REDE_OPTIONS.map(r => <option key={r}>{r}</option>)}
-                </select>
-                <select value={filter} onChange={e => setFilter(e.target.value)} style={selectStyle}>
-                  <option value="Todos">Todo Status</option>
-                  {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-            )}
-
-            {/* Filtro de data */}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, padding: "6px 10px", flexWrap: "wrap" }}>
-              <span style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a", whiteSpace: "nowrap" }}>📅 De</span>
-              <input type="text" value={filterDataInicio} onChange={e => setFilterDataInicio(e.target.value)} placeholder="dd/mm/aaaa"
-                style={{ background: "transparent", border: "none", color: "#c9a0f5", fontFamily: "'Cinzel', serif", fontSize: 12, outline: "none", width: 100 }} />
-              <span style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a" }}>até</span>
-              <input type="text" value={filterDataFim} onChange={e => setFilterDataFim(e.target.value)} placeholder="dd/mm/aaaa"
-                style={{ background: "transparent", border: "none", color: "#c9a0f5", fontFamily: "'Cinzel', serif", fontSize: 12, outline: "none", width: 100 }} />
-              {temFiltroData && (
-                <button onClick={() => { setFilterDataInicio(""); setFilterDataFim(""); }}
-                  style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 16, padding: "0 2px" }}>✕</button>
-              )}
+            <select value={mes} onChange={e => setMes(Number(e.target.value))} style={selectStyle}>{MONTHS.map((m,i) => <option key={m} value={i}>{m}</option>)}</select>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, flex: 1 }}>
+              <select value={filterRede} onChange={e => setFilterRede(e.target.value)} style={selectStyle}><option value="Todos">Todas as Redes</option>{REDE_OPTIONS.map(r => <option key={r}>{r}</option>)}</select>
+              <select value={filter} onChange={e => setFilter(e.target.value)} style={selectStyle}><option value="Todos">Todos os Status</option>{STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}</select>
             </div>
-
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <button onClick={() => loadRows(mes)} style={{ background: "#1a0d3a", color: "#c084fc", border: "1px solid #4a2a8a", borderRadius: 8, padding: "9px 14px", fontFamily: "'Cinzel', serif", fontSize: 12, cursor: "pointer", flex: isMobile ? 1 : undefined }}>⟳ Atualizar</button>
-              <div style={{ display: "flex", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, overflow: "hidden", flex: isMobile ? 2 : undefined }}>
-                {(["tabela", "calendario"] as ViewMode[]).map(mode => (
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => loadRows(mes)} style={{ background: "#1a0d3a", color: "#c084fc", border: "1px solid #4a2a8a", borderRadius: 8, padding: "9px 14px", fontFamily: "'Cinzel', serif", fontSize: 12, cursor: "pointer" }}>⟳</button>
+              <div style={{ display: "flex", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, overflow: "hidden" }}>
+                {(["tabela","calendario"] as ViewMode[]).map(mode => (
                   <button key={mode} onClick={() => { setViewMode(mode); setSelectedDay(null); }}
-                    style={{ flex: 1, background: viewMode === mode ? "linear-gradient(135deg, #4a2a8a, #7c3aed)" : "transparent", color: viewMode === mode ? "#fff" : "#5a3a8a", border: "none", padding: isMobile ? "9px 0" : "7px 14px", fontFamily: "'Cinzel', serif", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: 1, transition: "all 0.2s" }}>
+                    style={{ background: viewMode === mode ? "linear-gradient(135deg,#4a2a8a,#7c3aed)" : "transparent", color: viewMode === mode ? "#fff" : "#5a3a8a", border: "none", padding: "9px 14px", fontFamily: "'Cinzel', serif", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     {mode === "tabela" ? "≡ Tabela" : "🗓 Cal"}
                   </button>
                 ))}
@@ -805,123 +738,111 @@ export default function App() {
             </div>
           </div>
 
+          {/* Filtro data */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, padding: "6px 10px", marginBottom: 16, flexWrap: "wrap" }}>
+            <span style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a" }}>📅 De</span>
+            <input type="text" value={filterDataInicio} onChange={e => setFilterDataInicio(e.target.value)} placeholder="dd/mm/aaaa" style={{ background: "transparent", border: "none", color: "#c9a0f5", fontFamily: "'Cinzel', serif", fontSize: 12, outline: "none", width: 100 }} />
+            <span style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a" }}>até</span>
+            <input type="text" value={filterDataFim} onChange={e => setFilterDataFim(e.target.value)} placeholder="dd/mm/aaaa" style={{ background: "transparent", border: "none", color: "#c9a0f5", fontFamily: "'Cinzel', serif", fontSize: 12, outline: "none", width: 100 }} />
+            {(filterDataInicio || filterDataFim) && <button onClick={() => { setFilterDataInicio(""); setFilterDataFim(""); }} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 16 }}>✕</button>}
+          </div>
+
           {/* Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(auto-fit, minmax(80px, 1fr))", gap: 8, marginBottom: 18 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(6,1fr)", gap: 8, marginBottom: 18 }}>
             {STATUS_OPTIONS.map(s => {
               const c = STATUS_COLORS[s];
-              return (
-                <div key={s} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 10, padding: isMobile ? "8px 6px" : "8px 16px", display: "flex", flexDirection: "column", alignItems: "center", animation: "glow 3s ease-in-out infinite" }}>
-                  <span style={{ fontSize: isMobile ? 18 : 20, fontWeight: 900, color: c.text, fontFamily: "'Cinzel', serif" }}>{rows.filter(r => r.status === s).length}</span>
-                  <span style={{ fontSize: isMobile ? 8 : 10, color: c.text, opacity: 0.8, textAlign: "center" }}>{s}</span>
-                </div>
-              );
+              return <div key={s} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 10, padding: isMobile ? "8px 6px" : "8px 16px", textAlign: "center" }}>
+                <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 900, color: c.text, fontFamily: "'Cinzel', serif" }}>{rows.filter(r => r.status === s).length}</div>
+                <div style={{ fontSize: isMobile ? 8 : 10, color: c.text, opacity: 0.8 }}>{s}</div>
+              </div>;
             })}
-            <div style={{ background: "#1a0d3a", border: "1px solid #4a2a8a", borderRadius: 10, padding: isMobile ? "8px 6px" : "8px 16px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <span style={{ fontSize: isMobile ? 18 : 20, fontWeight: 900, color: "#c084fc", fontFamily: "'Cinzel', serif" }}>{rows.length}</span>
-              <span style={{ fontSize: isMobile ? 8 : 10, color: "#c084fc", opacity: 0.8 }}>Total</span>
+            <div style={{ background: "#1a0d3a", border: "1px solid #4a2a8a", borderRadius: 10, padding: isMobile ? "8px 6px" : "8px 16px", textAlign: "center" }}>
+              <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 900, color: "#c084fc", fontFamily: "'Cinzel', serif" }}>{rows.length}</div>
+              <div style={{ fontSize: isMobile ? 8 : 10, color: "#c084fc", opacity: 0.8 }}>Total</div>
             </div>
           </div>
 
           {/* Calendário */}
           {viewMode === "calendario" && (
             <div>
-              <div style={{ borderRadius: 16, border: "1px solid #4a2a8a", animation: "glow 4s ease-in-out infinite", padding: isMobile ? "10px 8px" : "16px", background: "#0d072088", position: "relative" }}>
+              <div style={{ borderRadius: 16, border: "1px solid #4a2a8a", padding: isMobile ? "10px 8px" : "16px", background: "#0d072088", position: "relative" }}>
                 {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-                <CalendarView rows={filtered} mes={mes} onSelectDay={handleSelectDay} isMobile={isMobile} />
+                <CalendarView rows={filtered} mes={mes} onSelectDay={(r, d) => setSelectedDay(prev => prev?.day === d ? null : { day: d, rows: r })} isMobile={isMobile} />
               </div>
               {selectedDay && <DayPanel day={selectedDay.day} mes={mes} rows={selectedDay.rows} onClose={() => setSelectedDay(null)} isMobile={isMobile} />}
-              <div style={{ marginTop: 14 }}>
-                <button onClick={addRow} style={{ background: "linear-gradient(135deg, #4a2a8a, #7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, cursor: "pointer", letterSpacing: 1, width: isMobile ? "100%" : "auto", boxShadow: "0 4px 15px #7c3aed44" }}>
-                  + Adicionar Postagem
-                </button>
-                {!isMobile && <span style={{ marginLeft: 12, color: "#5a3a8a", fontSize: 11 }}>Clique em um dia com posts para ver detalhes · ponto vermelho = urgente</span>}
-              </div>
+              <button onClick={addRow} style={{ marginTop: 14, background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, cursor: "pointer", width: isMobile ? "100%" : "auto" }}>+ Adicionar Postagem</button>
             </div>
           )}
 
-          {/* Tabela desktop / Cards mobile */}
+          {/* Tabela */}
           {viewMode === "tabela" && (
             <>
-              {isMobile ? (
-                <div style={{ position: "relative" }}>
-                  {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 12 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-                  {!loading && filtered.length === 0 && (
-                    <div style={{ padding: 40, textAlign: "center", color: "#5a3a8a", fontFamily: "'Cinzel', serif", fontSize: 13 }}>
-                      {rows.length === 0 ? "Nenhuma postagem ainda." : "Nenhuma postagem com esse filtro."}
-                    </div>
-                  )}
-                  {filtered.map((row, idx) => (
-                    <PostagemCard key={row.id} row={row} idx={idx} onUpdate={updateRow} onDuplicate={duplicateRow} onRemove={removeRow} />
-                  ))}
-                </div>
-              ) : (
-                <div style={{ overflowX: "auto", borderRadius: 16, border: "1px solid #4a2a8a", animation: "glow 4s ease-in-out infinite", position: "relative" }}>
-                  {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-                  <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 800 }}>
-                    <thead>
-                      <tr style={{ background: "linear-gradient(90deg, #2d1b69, #3d1b8a, #2d1b69)" }}>
-                        <th style={{ width: 50, padding: "12px 8px", borderRight: "1px solid #4a2a8a" }} />
-                        {COLS.map(col => (
-                          <th key={col.key} style={{ width: col.width, padding: "12px 10px", textAlign: "left", fontFamily: "'Cinzel', serif", fontSize: 10, fontWeight: 700, color: "#c084fc", letterSpacing: 1, textTransform: "uppercase", borderRight: "1px solid #4a2a8a", whiteSpace: "nowrap" }}>{col.label}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {!loading && filtered.length === 0 && (
-                        <tr><td colSpan={COLS.length + 1} style={{ padding: 48, textAlign: "center", color: "#5a3a8a", fontFamily: "'Cinzel', serif", fontSize: 13 }}>
-                          {rows.length === 0 ? "Nenhuma postagem ainda. Clique em + Adicionar." : "Nenhuma postagem com esse filtro."}
-                        </td></tr>
-                      )}
-                      {filtered.map((row, idx) => {
-                        const urgency = getUrgency(row.data, row.status);
-                        const us = urgency ? URGENCY_STYLES[urgency] : null;
-                        const sc = STATUS_COLORS[row.status];
-                        const baseBg = us ? us.rowBg : (sc ? sc.rowBg : (idx % 2 === 0 ? "#110828" : "#0d0720"));
-                        const baseBorder = us ? us.border : (sc ? sc.border : "transparent");
-                        return (
-                          <tr key={row.id}
-                            style={{ background: baseBg, borderLeft: `3px solid ${baseBorder}`, transition: "background 0.15s" }}
-                            onMouseEnter={e => (e.currentTarget.style.background = "#1e0f45")}
-                            onMouseLeave={e => (e.currentTarget.style.background = baseBg)}
-                          >
-                            <td style={{ padding: "6px 4px", textAlign: "center", borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45", fontSize: 10, color: "#5a3a8a" }}>
-                              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                                <span>{idx + 1}</span>
-                                <button onClick={() => duplicateRow(row)} title="Duplicar" style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }} onMouseEnter={e => (e.currentTarget.style.color = "#c084fc")} onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}>📋</button>
-                                <button onClick={() => removeRow(row.id)} title="Deletar" style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12, padding: 0 }} onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")} onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}>✕</button>
-                              </div>
+              <div style={{ overflowX: "auto", borderRadius: 16, border: "1px solid #4a2a8a", position: "relative" }}>
+                {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
+                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 800 }}>
+                  <thead>
+                    <tr style={{ background: "linear-gradient(90deg,#2d1b69,#3d1b8a,#2d1b69)" }}>
+                      <th style={{ width: 50, padding: "12px 8px", borderRight: "1px solid #4a2a8a" }} />
+                      {COLS.map(col => <th key={col.key} style={{ width: col.width, padding: "12px 10px", textAlign: "left", fontFamily: "'Cinzel', serif", fontSize: 10, fontWeight: 700, color: "#c084fc", letterSpacing: 1, textTransform: "uppercase", borderRight: "1px solid #4a2a8a", whiteSpace: "nowrap" }}>{col.label}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {!loading && filtered.length === 0 && <tr><td colSpan={COLS.length+1} style={{ padding: 48, textAlign: "center", color: "#5a3a8a", fontFamily: "'Cinzel', serif", fontSize: 13 }}>{rows.length === 0 ? "Nenhuma postagem ainda." : "Nenhuma com esse filtro."}</td></tr>}
+                    {filtered.map((row, idx) => {
+                      const urgency = getUrgency(row.data, row.status);
+                      const us = urgency ? URGENCY_STYLES[urgency] : null;
+                      const sc = STATUS_COLORS[row.status];
+                      const baseBg = us ? us.rowBg : (sc ? sc.rowBg : (idx % 2 === 0 ? "#110828" : "#0d0720"));
+                      const baseBorder = us ? us.border : (sc ? sc.border : "transparent");
+                      return (
+                        <tr key={row.id} style={{ background: baseBg, borderLeft: `3px solid ${baseBorder}` }}
+                          onMouseEnter={e => (e.currentTarget.style.background = "#1e0f45")}
+                          onMouseLeave={e => (e.currentTarget.style.background = baseBg)}>
+                          <td style={{ padding: "6px 4px", textAlign: "center", borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45", fontSize: 10, color: "#5a3a8a" }}>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                              <span>{idx+1}</span>
+                              <button onClick={() => duplicateRow(row)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12 }} onMouseEnter={e => (e.currentTarget.style.color="#c084fc")} onMouseLeave={e => (e.currentTarget.style.color="#5a3a8a")}>📋</button>
+                              <button onClick={() => removeRow(row.id)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12 }} onMouseEnter={e => (e.currentTarget.style.color="#ef4444")} onMouseLeave={e => (e.currentTarget.style.color="#5a3a8a")}>✕</button>
+                            </div>
+                          </td>
+                          {COLS.map(col => (
+                            <td key={col.key} style={{ padding: "4px 6px", borderRight: "1px solid #1e0f45", borderBottom: "1px solid #1e0f45", verticalAlign: "top" }}>
+                              <EditableCell value={String(row[col.key] ?? "")} onChange={val => updateRow(row.id, col.key, val)} type={col.type} options={col.options} placeholder={col.placeholder} wide={col.wide} urgency={col.key === "data" ? urgency : undefined} />
                             </td>
-                            {COLS.map(col => (
-                              <td key={col.key} style={{ padding: "4px 6px", borderRight: "1px solid #1e0f45", borderBottom: "1px solid #1e0f45", verticalAlign: "top" }}>
-                                <EditableCell value={String(row[col.key] ?? "")} onChange={val => updateRow(row.id, col.key, val)} type={col.type} options={col.options} placeholder={col.placeholder} wide={col.wide} urgency={col.key === "data" ? urgency : undefined} />
-                              </td>
-                            ))}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              <div style={{ marginTop: 14 }}>
-                <button onClick={addRow} style={{ background: "linear-gradient(135deg, #4a2a8a, #7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, cursor: "pointer", letterSpacing: 1, width: isMobile ? "100%" : "auto", boxShadow: "0 4px 15px #7c3aed44" }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 25px #7c3aed66"; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 15px #7c3aed44"; }}
-                >+ Adicionar Postagem</button>
-                {!isMobile && <span style={{ marginLeft: 12, color: "#5a3a8a", fontSize: 11 }}>Clique em qualquer célula para editar · 📋 duplicar · ✕ deletar · ordenado por data</span>}
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
+              <button onClick={addRow} style={{ marginTop: 14, background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, cursor: "pointer", width: isMobile ? "100%" : "auto" }}>+ Adicionar Postagem</button>
             </>
           )}
         </>
       )}
 
       {appTab === "trafego" && <TrafegoView isMobile={isMobile} />}
+      {appTab === "leads"   && <LeadsView   isMobile={isMobile} />}
 
       <div style={{ marginTop: 36, textAlign: "center", color: "#3d1b69", fontSize: 10, fontFamily: "'Cinzel', serif", letterSpacing: 2 }}>
-        <img src="/icons/criandoxp.png" alt="" style={{ width: 14, height: 14, objectFit: "contain", verticalAlign: "middle", marginRight: 4 }} />
-        CRIANDO XP · {appTab === "calendario" ? `CALENDÁRIO · ${MONTHS[mes].toUpperCase()}` : "TRÁFEGO PAGO · META ADS"}
+        🎲 CRIANDO XP · DASHBOARD INTERNO
       </div>
     </div>
+  );
+}
+
+// ─── App Root ──────────────────────────────────────────────────────────────
+export default function App() {
+  const [page, setPage] = useState<AppPage>("landing");
+
+  return (
+    <>
+      <style>{GLOBAL_CSS}</style>
+      {page === "landing"
+        ? <LandingPage onAbrirDashboard={() => setPage("dashboard")} />
+        : <Dashboard   onVoltar={() => setPage("landing")} />
+      }
+    </>
   );
 }
