@@ -647,7 +647,21 @@ function LeadsView({ isMobile }: { isMobile: boolean }) {
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", cursor: "pointer" }} onClick={() => setExpanded(isOpen ? null : lead.id)}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 700, color: "#e2d0ff", marginBottom: 2 }}>{lead.nome || "—"}</div>
-                  <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 11, color: "#7c3aed" }}>{lead.whatsapp_discord || "—"} · {date}</div>
+                  <div style={{  display: "flex", alignItems: "center", gap: 8 }}>
+  <span style={{ fontFamily: "'Lato', sans-serif", fontSize: 11, color: "#7c3aed" }}>{lead.whatsapp_discord || "—"} · {date}</span>
+  {lead.whatsapp_discord && (
+    <>
+      <button
+        onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(lead.whatsapp_discord); }}
+        title="Copiar número"
+        style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: "#7c3aed", cursor: "pointer", fontSize: 11, padding: "2px 7px" }}>
+        📋
+      </button>
+      
+      <a href={`https://wa.me/55${lead.whatsapp_discord.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ background: "none", border: "1px solid #16a34a", borderRadius: 6, color: "#86efac", cursor: "pointer", fontSize: 11, padding: "2px 7px", textDecoration: "none" }}>💬</a>
+    </>
+  )}
+                  </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                   <select value={lead.status} onChange={e => { e.stopPropagation(); updateStatus(lead.id, e.target.value); }}
