@@ -692,7 +692,9 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
 
       {/* HEADER */}
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 20, marginBottom: 18, borderBottom: "2px solid #4a2a8a", paddingBottom: 14, flexWrap: "wrap" }}>
-        <div style={{ width: isMobile ? 48 : 80, height: isMobile ? 48 : 80, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#c084fc)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: isMobile ? 24 : 36, animation: "float 4s ease-in-out infinite", flexShrink: 0 }}>🎲</div>
+        <div style={{ width: isMobile ? 48 : 80, height: isMobile ? 48 : 80, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#c084fc)", display: "flex", alignItems: "center", justifyContent: "center", animation: "float 4s ease-in-out infinite", flexShrink: 0 }}>
+  <img src="/icons/criandoxp.png" alt="Criando XP" style={{ width: isMobile ? 32 : 52, height: isMobile ? 32 : 52, objectFit: "contain" }} />
+</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'Cinzel', serif", fontSize: isMobile ? 18 : 24, fontWeight: 900, background: "linear-gradient(90deg,#c084fc,#818cf8,#a855f7)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>Criando XP</div>
           <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#7c3aed", letterSpacing: 3, textTransform: "uppercase" }}>
