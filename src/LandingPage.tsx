@@ -222,7 +222,7 @@ const CSS = `
 
 // ─── Componentes de seção ──────────────────────────────────────────────────
 
-function Navbar({ onInscrever }: { onInscrever: () => void }) {
+function Navbar({ onInscrever, onLogoClick }: { onInscrever: () => void; onLogoClick: () => void }) {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 40);
@@ -241,7 +241,7 @@ function Navbar({ onInscrever }: { onInscrever: () => void }) {
       display: "flex", alignItems: "center", justifyContent: "space-between",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <img src="/icons/criandoxp.png" alt="Criando XP" style={{ width: 36, height: 36, objectFit: "contain" }} onClick={handleLogoClick} />
+      <img src="/icons/criandoxp.png" alt="Criando XP" style={{ width: 36, height: 36, objectFit: "contain" }} onClick={onLogoClick} />
         <span style={{ fontFamily: "'Cinzel', serif", fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#c084fc,#818cf8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Criando XP</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -753,13 +753,6 @@ export default function LandingPage({ onAbrirDashboard }: { onAbrirDashboard: ()
       {paginaAtual === "landing" ? (
         <>
   <Navbar onInscrever={() => setPaginaAtual("form")} onLogoClick={handleLogoClick} />
-
-          {/* Logo clicável secreto — fica invisível no canto */}
-          <div
-            onClick={handleLogoClick}
-            style={{ position: "fixed", bottom: 16, right: 16, zIndex: 200, width: 40, height: 40, borderRadius: "50%", cursor: "default", opacity: 0 }}
-            title=""
-          />
 
           <Hero onInscrever={() => setPaginaAtual("form")} />
           <Beneficios />
