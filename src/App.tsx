@@ -563,7 +563,7 @@ function LeadsView({ isMobile }: { isMobile: boolean }) {
                       { label: "Origem",               val: origem },
                     ].map(({ label, val }) => (
                       <div key={label}>
-                        <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 2 }}>{label.toUpperCase()}</div>
+                        <div style={{ fontSize: 9, color: "#a78bfa", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 2 }}>{label.toUpperCase()}</div>
                         <div style={{ fontSize: 12, color: "#e2d0ff", fontFamily: "'Lato', sans-serif" }}>{val || "—"}</div>
                       </div>
                     ))}
@@ -643,7 +643,15 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
 
   const updateRow = (id: string, key: keyof Row, val: string) => {
     setRowsSafe(prev => {
-      const next = prev.map(r => r.id === id ? { ...r, [key]: val } : r);
+      const next = prev.map(r => {
+        if (r.id !== id) return r;
+        const updated = { ...r, [key]: val };
+        if (key === "data") {
+          const d = parseDateBR(val);
+          if (d) updated.mes = d.getMonth();
+        }
+        return updated;
+      });
       const updated = next.find(r => r.id === id);
       if (updated) scheduleUpsert(updated);
       return next;
