@@ -1046,13 +1046,51 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
 // ─── App Root ──────────────────────────────────────────────────────────────
 export default function App() {
   const [page, setPage] = useState<AppPage>("landing");
+  const [autenticado, setAutenticado] = useState(false);
+  const [senhaInput, setSenhaInput] = useState("");
+  const [erroSenha, setErroSenha] = useState(false);
+
+  const SENHA = "critical7"; // troca pela senha que quiser
+
+  const tentarEntrar = () => {
+    if (senhaInput === SENHA) {
+      setAutenticado(true);
+      setErroSenha(false);
+    } else {
+      setErroSenha(true);
+    }
+  };
+
+  const telaSenha = (
+    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#0d0720,#1a0d3a)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ background: "#110828", border: "1px solid #4a2a8a", borderRadius: 16, padding: "40px 32px", textAlign: "center", width: "100%", maxWidth: 360 }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔐</div>
+        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 900, color: "#c084fc", marginBottom: 8 }}>Área Restrita</div>
+        <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 13, color: "#5a3a8a", marginBottom: 24 }}>Criando XP · Dashboard Interno</div>
+        <input
+          type="password"
+          value={senhaInput}
+          onChange={e => { setSenhaInput(e.target.value); setErroSenha(false); }}
+          onKeyDown={e => e.key === "Enter" && tentarEntrar()}
+          placeholder="Senha"
+          style={{ width: "100%", background: "#0d0720", border: `1px solid ${erroSenha ? "#ef4444" : "#4a2a8a"}`, borderRadius: 10, color: "#e2d0ff", fontFamily: "'Lato', sans-serif", fontSize: 15, padding: "12px 16px", outline: "none", marginBottom: 8, boxSizing: "border-box" as const }}
+        />
+        {erroSenha && <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 12, color: "#fca5a5", marginBottom: 12 }}>Senha incorreta.</div>}
+        <button onClick={tentarEntrar} style={{ width: "100%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
+          Entrar
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <>
       <style>{GLOBAL_CSS}</style>
       {page === "landing"
         ? <LandingPage onAbrirDashboard={() => setPage("dashboard")} />
-        : <Dashboard   onVoltar={() => setPage("landing")} />
+        : autenticado
+          ? <Dashboard onVoltar={() => { setPage("landing"); setAutenticado(false); setSenhaInput(""); }} />
+          : telaSenha
       }
     </>
   );
