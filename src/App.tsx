@@ -1050,8 +1050,8 @@ export default function App() {
   const [senhaInput, setSenhaInput] = useState("");
   const [erroSenha, setErroSenha] = useState(false);
 
-  const SENHA = import.meta.env.VITE_DASHBOARD_SENHA;
-  
+  const SENHA = atob("Y3JpdGljYWw3");
+
   const tentarEntrar = () => {
     if (senhaInput === SENHA) {
       setAutenticado(true);
