@@ -133,11 +133,15 @@ const makeRow = (n: number, mes: number): Row => ({
 
 // ─── Supabase ops ──────────────────────────────────────────────────────────
 async function dbLoad(mes: number): Promise<Row[]> {
-  const res = await fetch(`${TABLE}?mes=eq.${mes}&select=*`, {
+  const res = await fetch(`${TABLE}?select=*`, {
     headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
   });
   if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  const all: Row[] = await res.json();
+  return all.filter(r => {
+    const d = parseDateBR(r.data);
+    return d ? d.getMonth() === mes : r.mes === mes;
+  });
 }
 
 async function dbUpsert(row: Row): Promise<void> {
@@ -971,62 +975,63 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
             </div>
           )}
 
-          {/* Tabela */}
-          {/* Tabela */}
+
+
+{/* Tabela */}
           {viewMode === "tabela" && (
-            <>
-              {isMobile ? (
-                <div>
-                  {loading && <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-                  {!loading && filtered.length === 0 && <div style={{ padding: 40, textAlign: "center", color: "#5a3a8a", fontFamily: "'Cinzel',serif", fontSize: 13 }}>{rows.length === 0 ? "Nenhuma postagem ainda." : "Nenhuma com esse filtro."}</div>}
-                  {filtered.map((row, idx) => (
-                    <PostagemCard key={row.id} row={row} idx={idx} onUpdate={updateRow} onDuplicate={duplicateRow} onRemove={removeRow} />
+  <>
+    {isMobile ? (
+      <div style={{ position: "relative" }}>
+        {loading && <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
+        {!loading && filtered.length === 0 && <div style={{ padding: 40, textAlign: "center", color: "#5a3a8a", fontFamily: "'Cinzel',serif", fontSize: 13 }}>{rows.length === 0 ? "Nenhuma postagem ainda." : "Nenhuma com esse filtro."}</div>}
+        {filtered.map((row, idx) => <PostagemCard key={row.id} row={row} idx={idx} onUpdate={updateRow} onDuplicate={duplicateRow} onRemove={removeRow} />)}
+      </div>
+    ) : (
+      <div style={{ overflowX: "auto", borderRadius: 16, border: "1px solid #4a2a8a", position: "relative" }}>
+        {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 800 }}>
+          <thead>
+            <tr style={{ background: "linear-gradient(90deg,#2d1b69,#3d1b8a,#2d1b69)" }}>
+              <th style={{ width: 50, padding: "12px 8px", borderRight: "1px solid #4a2a8a" }} />
+              {COLS.map(col => <th key={col.key} style={{ width: col.width, padding: "12px 10px", textAlign: "left", fontFamily: "'Cinzel',serif", fontSize: 10, fontWeight: 700, color: "#c084fc", letterSpacing: 1, textTransform: "uppercase", borderRight: "1px solid #4a2a8a", whiteSpace: "nowrap" }}>{col.label}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {!loading && filtered.length === 0 && <tr><td colSpan={COLS.length+1} style={{ padding: 48, textAlign: "center", color: "#5a3a8a", fontFamily: "'Cinzel',serif", fontSize: 13 }}>{rows.length === 0 ? "Nenhuma postagem ainda." : "Nenhuma com esse filtro."}</td></tr>}
+            {filtered.map((row, idx) => {
+              const urgency = getUrgency(row.data, row.status);
+              const us = urgency ? URGENCY_STYLES[urgency] : null;
+              const sc = STATUS_COLORS[row.status];
+              const baseBg = us ? us.rowBg : sc.rowBg;
+              const baseBorder = us ? us.border : sc.border;
+              return (
+                <tr key={row.id} style={{ background: baseBg, borderLeft: `3px solid ${baseBorder}` }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#1e0f45")}
+                  onMouseLeave={e => (e.currentTarget.style.background = baseBg)}>
+                  <td style={{ padding: "6px 4px", textAlign: "center", borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45", fontSize: 10, color: "#5a3a8a" }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                      <span>{idx+1}</span>
+                      <button onClick={() => duplicateRow(row)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12 }} onMouseEnter={e => (e.currentTarget.style.color="#c084fc")} onMouseLeave={e => (e.currentTarget.style.color="#5a3a8a")}>📋</button>
+                      <button onClick={() => removeRow(row.id)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12 }} onMouseEnter={e => (e.currentTarget.style.color="#ef4444")} onMouseLeave={e => (e.currentTarget.style.color="#5a3a8a")}>✕</button>
+                    </div>
+                  </td>
+                  {COLS.map(col => (
+                    <td key={col.key} style={{ padding: "4px 6px", borderRight: "1px solid #1e0f45", borderBottom: "1px solid #1e0f45", verticalAlign: "top" }}>
+                      <EditableCell value={String(row[col.key] ?? "")} onChange={val => updateRow(row.id, col.key, val)} type={col.type} options={col.options} placeholder={col.placeholder} wide={col.wide} urgency={col.key === "data" ? urgency : undefined} />
+                    </td>
                   ))}
-                </div>
-              ) : (
-                <div style={{ overflowX: "auto", borderRadius: 16, border: "1px solid #4a2a8a", position: "relative" }}>
-                  {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-                  <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 800 }}>
-                    <thead>
-                      <tr style={{ background: "linear-gradient(90deg,#2d1b69,#3d1b8a,#2d1b69)" }}>
-                        <th style={{ width: 50, padding: "12px 8px", borderRight: "1px solid #4a2a8a" }} />
-                        {COLS.map(col => <th key={col.key} style={{ width: col.width, padding: "12px 10px", textAlign: "left", fontFamily: "'Cinzel',serif", fontSize: 10, fontWeight: 700, color: "#c084fc", letterSpacing: 1, textTransform: "uppercase", borderRight: "1px solid #4a2a8a", whiteSpace: "nowrap" }}>{col.label}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {!loading && filtered.length === 0 && <tr><td colSpan={COLS.length+1} style={{ padding: 48, textAlign: "center", color: "#5a3a8a", fontFamily: "'Cinzel',serif", fontSize: 13 }}>{rows.length === 0 ? "Nenhuma postagem ainda." : "Nenhuma com esse filtro."}</td></tr>}
-                      {filtered.map((row, idx) => {
-                        const urgency = getUrgency(row.data, row.status);
-                        const us = urgency ? URGENCY_STYLES[urgency] : null;
-                        const sc = STATUS_COLORS[row.status];
-                        const baseBg = us ? us.rowBg : sc.rowBg;
-                        const baseBorder = us ? us.border : sc.border;
-                        return (
-                          <tr key={row.id} style={{ background: baseBg, borderLeft: `3px solid ${baseBorder}` }}
-                            onMouseEnter={e => (e.currentTarget.style.background = "#1e0f45")}
-                            onMouseLeave={e => (e.currentTarget.style.background = baseBg)}>
-                            <td style={{ padding: "6px 4px", textAlign: "center", borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45", fontSize: 10, color: "#5a3a8a" }}>
-                              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                                <span>{idx+1}</span>
-                                <button onClick={() => duplicateRow(row)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12 }} onMouseEnter={e => (e.currentTarget.style.color="#c084fc")} onMouseLeave={e => (e.currentTarget.style.color="#5a3a8a")}>📋</button>
-                                <button onClick={() => removeRow(row.id)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12 }} onMouseEnter={e => (e.currentTarget.style.color="#ef4444")} onMouseLeave={e => (e.currentTarget.style.color="#5a3a8a")}>✕</button>
-                              </div>
-                            </td>
-                            {COLS.map(col => (
-                              <td key={col.key} style={{ padding: "4px 6px", borderRight: "1px solid #1e0f45", borderBottom: "1px solid #1e0f45", verticalAlign: "top" }}>
-                                <EditableCell value={String(row[col.key] ?? "")} onChange={val => updateRow(row.id, col.key, val)} type={col.type} options={col.options} placeholder={col.placeholder} wide={col.wide} urgency={col.key === "data" ? urgency : undefined} />
-                              </td>
-                            ))}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              <button onClick={addRow} style={{ marginTop: 14, background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel',serif", fontSize: 13, fontWeight: 700, cursor: "pointer", width: isMobile ? "100%" : "auto" }}>+ Adicionar Postagem</button>
-            </>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+    <button onClick={addRow} style={{ marginTop: 14, background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel',serif", fontSize: 13, fontWeight: 700, cursor: "pointer", width: isMobile ? "100%" : "auto" }}>+ Adicionar Postagem</button>
+    </>
           )}
+        </>
+      )}
 
       {appTab === "trafego" && <TrafegoView isMobile={isMobile} />}
       {appTab === "leads"   && <LeadsView   isMobile={isMobile} />}
