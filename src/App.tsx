@@ -568,13 +568,14 @@ function TrafegoView({ isMobile }: { isMobile: boolean }) {
 }
 
 // ─── LeadsView ─────────────────────────────────────────────────────────────
-const LEAD_STATUS_OPTIONS = ["Novo lead","Em contato","Mesa alocada","Desistiu","Lista de espera"];
+const LEAD_STATUS_OPTIONS = ["Novo lead","Em contato","Mesa alocada","Desistiu","Lista de espera","Não respondeu"];
 const LEAD_STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   "Novo lead":      { bg: "#3d2068", text: "#c9a0f5", border: "#6b3fa0" },
   "Em contato":     { bg: "#2a1a5e", text: "#93c5fd", border: "#3b5bdb" },
   "Mesa alocada":   { bg: "#1a3a1a", text: "#86efac", border: "#16a34a" },
   "Desistiu":       { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626" },
   "Lista de espera":{ bg: "#1e3a5f", text: "#6ee7b7", border: "#059669" },
+  "Não respondeu":  { bg: "#2a2a2a", text: "#9ca3af", border: "#4b5563" },
 };
 
 function LeadsView({ isMobile }: { isMobile: boolean }) {
