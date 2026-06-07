@@ -612,17 +612,43 @@ function LeadsView({ isMobile }: { isMobile: boolean }) {
 
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(5,1fr)", gap: 8, marginBottom: 20 }}>
-        {LEAD_STATUS_OPTIONS.map(s => {
-          const c = LEAD_STATUS_COLORS[s];
-          return (
-            <div key={s} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center", cursor: "pointer" }} onClick={() => setFilterStatus(filterStatus === s ? "Todos" : s)}>
-              <div style={{ fontSize: 20, fontWeight: 900, color: c.text, fontFamily: "'Cinzel', serif" }}>{byStatus[s] ?? 0}</div>
-              <div style={{ fontSize: 8, color: c.text, opacity: 0.8, fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>{s}</div>
-            </div>
-          );
-        })}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+
+{/* Cards de status */}
+<div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(6,1fr)", gap: 8 }}>
+  {LEAD_STATUS_OPTIONS.map(s => {
+    const c = LEAD_STATUS_COLORS[s];
+    return (
+      <div key={s} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center", cursor: "pointer" }} onClick={() => setFilterStatus(filterStatus === s ? "Todos" : s)}>
+        <div style={{ fontSize: 20, fontWeight: 900, color: c.text, fontFamily: "'Cinzel', serif" }}>{byStatus[s] ?? 0}</div>
+        <div style={{ fontSize: 8, color: c.text, opacity: 0.8, fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>{s}</div>
       </div>
+    );
+  })}
+</div>
+
+{/* Cards de origem */}
+<div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(3,1fr)", gap: 8 }}>
+  {[
+    { label: "Meta Ads", icon: "/icons/facebook.png", chaves: ["meta", "facebook"] },
+    { label: "Instagram", icon: "/icons/instagram.png", chaves: ["instagram"] },
+    { label: "TikTok", icon: "/icons/tiktok.png", chaves: ["tiktok"] },
+  ].map(canal => {
+    const count = leads.filter(l => {
+      const origem = (l.notas ?? "").toLowerCase();
+      return canal.chaves.some(k => origem.includes(k));
+    }).length;
+    return (
+      <div key={canal.label} style={{ background: "#110828", border: "1px solid #2d1b69", borderRadius: 10, padding: "10px 8px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+        <img src={canal.icon} alt={canal.label} style={{ width: 24, height: 24, objectFit: "contain" }} />
+        <div style={{ fontSize: 20, fontWeight: 900, color: "#e2d0ff", fontFamily: "'Cinzel', serif" }}>{count}</div>
+        <div style={{ fontSize: 8, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>{canal.label}</div>
+      </div>
+    );
+  })}
+</div>
+
+</div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Buscar por nome, contato ou sistema..."
