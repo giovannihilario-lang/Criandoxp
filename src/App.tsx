@@ -633,6 +633,8 @@ function LeadsView({ isMobile }: { isMobile: boolean }) {
     { label: "Meta Ads", icon: "/icons/facebook.png", chaves: ["meta", "facebook"] },
     { label: "Instagram", icon: "/icons/instagram.png", chaves: ["instagram"] },
     { label: "TikTok", icon: "/icons/tiktok.png", chaves: ["tiktok"] },
+    { label: "Mayoou",     icon: "/icons/mayoou.png",     chaves: ["mayoou"] },  // ← adicionar
+
   ].map(canal => {
     const count = leads.filter(l => {
       const origem = (l.notas ?? "").toLowerCase();
@@ -640,7 +642,7 @@ function LeadsView({ isMobile }: { isMobile: boolean }) {
     }).length;
     return (
       <div key={canal.label} style={{ background: "#110828", border: "1px solid #2d1b69", borderRadius: 10, padding: "10px 8px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-        <img src={canal.icon} alt={canal.label} style={{ width: 24, height: 24, objectFit: "contain" }} />
+        <img src={canal.icon} alt={canal.label} style={{ width: 40, height: 40, objectFit: "contain" }} />
         <div style={{ fontSize: 20, fontWeight: 900, color: "#e2d0ff", fontFamily: "'Cinzel', serif" }}>{count}</div>
         <div style={{ fontSize: 8, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>{canal.label}</div>
       </div>
