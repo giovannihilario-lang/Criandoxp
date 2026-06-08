@@ -633,7 +633,7 @@ function LeadsView({ isMobile }: { isMobile: boolean }) {
     { label: "Meta Ads", icon: "/icons/facebook.png", chaves: ["meta", "facebook"] },
     { label: "Instagram", icon: "/icons/instagram.png", chaves: ["instagram"] },
     { label: "TikTok", icon: "/icons/tiktok.png", chaves: ["tiktok"] },
-    { label: "Mayoou",     icon: "public/icons/mayoou.png",     chaves: ["mayoou"] },  // ← adicionar
+    { label: "Mayoou",     icon: "public/icons/mayoou.png",     chaves: ["mayoou"] },
 
   ].map(canal => {
     const count = leads.filter(l => {
