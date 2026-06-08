@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import LandingPage from "./LandingPage";
+import mayoouImg from "../public/icons/mayoou.png";
 
 // ─── Supabase ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://zovgkatndrgzxocwpdjm.supabase.co";
@@ -633,8 +634,8 @@ function LeadsView({ isMobile }: { isMobile: boolean }) {
     { label: "Meta Ads", icon: "/icons/facebook.png", chaves: ["meta", "facebook"] },
     { label: "Instagram", icon: "/icons/instagram.png", chaves: ["instagram"] },
     { label: "TikTok", icon: "/icons/tiktok.png", chaves: ["tiktok"] },
-    { label: "Mayoou", icon: "/icons/mayoou.png", chaves: ["mayoou"] },
-  ].map(canal => {
+    { label: "Mayoou", icon: mayoouImg, chaves: ["mayoou"] },
+    ].map(canal => {
     const count = leads.filter(l => {
       const origem = (l.notas ?? "").toLowerCase();
       return canal.chaves.some(k => origem.includes(k));
