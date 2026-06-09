@@ -1075,19 +1075,19 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
     if (pending) { clearTimeout(pending); pendingUpserts.current.delete(id); }
     setRowsSafe(prev => prev.filter(r => r.id !== id));
     try { await dbDelete(id); } catch { setSyncStatus("error"); }
+  };
 
-    const movePost = (rowId: string, newDateStr: string) => {
-      setRowsSafe(prev => {
-        const next = prev.map(r => {
-          if (r.id !== rowId) return r;
-          const d = parseDateBR(newDateStr);
-          const updated = { ...r, data: newDateStr, mes: d ? d.getMonth() : r.mes };
-          scheduleUpsert(updated);
-          return updated;
-        });
-        return next;
+  const movePost = (rowId: string, newDateStr: string) => {
+    setRowsSafe(prev => {
+      const next = prev.map(r => {
+        if (r.id !== rowId) return r;
+        const d = parseDateBR(newDateStr);
+        const updated = { ...r, data: newDateStr, mes: d ? d.getMonth() : r.mes };
+        scheduleUpsert(updated);
+        return updated;
       });
-    };
+      return next;
+    });
   };
 
   const dInicio = parseDateBR(filterDataInicio);
@@ -1190,8 +1190,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
             <div>
               <div style={{ borderRadius: 16, border: "1px solid #4a2a8a", padding: isMobile ? "10px 8px" : "16px", background: "#0d072088", position: "relative" }}>
                 {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-                <CalendarView rows={filtered} mes={mes} onSelectDay={(r, d) => setSelectedDay(prev => prev?.day === d ? null : { day: d, rows: r })} isMobile={isMobile} onMovePost={movePost} />
-              </div>
+                <CalendarView rows={filtered} mes={mes} onSelectDay={(r, d) => setSelectedDay(prev => prev?.day === d ? null : { day: d, rows: r })} isMobile={isMobile} onMovePost={movePost} />              </div>
               {selectedDay && <DayPanel day={selectedDay.day} mes={mes} rows={selectedDay.rows} onClose={() => setSelectedDay(null)} isMobile={isMobile} />}
               <button onClick={addRow} style={{ marginTop: 14, background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, cursor: "pointer", width: isMobile ? "100%" : "auto" }}>+ Adicionar Postagem</button>
             </div>
