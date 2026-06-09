@@ -243,8 +243,7 @@ function EditableCell({ value, onChange, type = "text", options, placeholder, wi
       style={{ width: "100%", minHeight: wide ? 60 : 36, background: "#1a0d3a", color: "#e2d0ff", border: "1px solid #7c3aed", borderRadius: 6, padding: "6px 8px", fontSize: 13, fontFamily: "'Lato', sans-serif", resize: "vertical", outline: "none", boxSizing: "border-box" }} />
   ) : (
     <div onClick={() => setEditing(true)}
-      style={{ minHeight: 32, padding: "6px", color: value ? "#e2d0ff" : "#5a3a8a", fontSize: 13, fontFamily: "'Lato', sans-serif", cursor: "text", borderRadius: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-      onMouseEnter={e => (e.currentTarget.style.background = "#2d1b69")}
+    style={{ minHeight: 32, padding: "6px", color: value ? "#e2d0ff" : "#5a3a8a", fontSize: 13, fontFamily: "'Lato', sans-serif", cursor: "text", borderRadius: 4, whiteSpace: "normal", overflow: "hidden", wordBreak: "break-word" }}      onMouseEnter={e => (e.currentTarget.style.background = "#2d1b69")}
       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
       {value || <span style={{ fontStyle: "italic", opacity: 0.4 }}>{placeholder ?? "—"}</span>}
       {us && <span style={{ display: "inline-block", marginLeft: 6, background: us.badgeBg, color: us.badgeColor, fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel', serif", borderRadius: 4, padding: "1px 5px", letterSpacing: 1, animation: us.anim, verticalAlign: "middle" }}>{us.badge}</span>}
