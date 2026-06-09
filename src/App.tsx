@@ -253,12 +253,21 @@ function EditableCell({ value, onChange, type = "text", options, placeholder, wi
 }
 
 // ─── CalendarView ──────────────────────────────────────────────────────────
-function CalendarView({ rows, mes, onSelectDay, isMobile }: { rows: Row[]; mes: number; onSelectDay: (rows: Row[], day: number) => void; isMobile: boolean }) {
+function CalendarView({ rows, mes, onSelectDay, isMobile, onMovePost }: {
+  rows: Row[];
+  mes: number;
+  onSelectDay: (rows: Row[], day: number) => void;
+  isMobile: boolean;
+  onMovePost: (rowId: string, newDateStr: string) => void;
+}) {
   const year = new Date().getFullYear();
   const firstDay = new Date(year, mes, 1).getDay();
   const daysInMonth = new Date(year, mes + 1, 0).getDate();
   const today = new Date();
   const todayDay = (today.getMonth() === mes && today.getFullYear() === year) ? today.getDate() : -1;
+
+  const [dragOverDay, setDragOverDay] = useState<number | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const byDay: Record<number, Row[]> = {};
   rows.forEach(r => {
@@ -274,35 +283,114 @@ function CalendarView({ rows, mes, onSelectDay, isMobile }: { rows: Row[]; mes: 
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
+  const pad = (n: number) => String(n).padStart(2, "0");
+
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMobile ? 2 : 4, marginBottom: 4 }}>
-        {WEEKDAYS.map(w => <div key={w} style={{ textAlign: "center", padding: "6px 0", fontFamily: "'Cinzel', serif", fontSize: isMobile ? 8 : 10, color: "#7c3aed", fontWeight: 700 }}>{w}</div>)}
+        {WEEKDAYS.map(w => (
+          <div key={w} style={{ textAlign: "center", padding: "6px 0", fontFamily: "'Cinzel', serif", fontSize: isMobile ? 8 : 10, color: "#7c3aed", fontWeight: 700 }}>{w}</div>
+        ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMobile ? 2 : 4 }}>
         {cells.map((day, idx) => {
           if (day === null) return <div key={`e-${idx}`} style={{ minHeight: isMobile ? 54 : 80 }} />;
           const dayRows = byDay[day] ?? [];
           const isToday = day === todayDay;
+          const isDragOver = dragOverDay === day;
           const hasUrgent = dayRows.some(r => { const u = getUrgency(r.data, r.status); return u === "hoje" || u === "amanha"; });
+
           return (
-            <div key={day} onClick={() => dayRows.length > 0 && onSelectDay(dayRows, day)}
-              style={{ minHeight: isMobile ? 54 : 80, background: isToday ? "linear-gradient(135deg,#3d1b8a55,#7c3aed33)" : "#110828", border: isToday ? "2px solid #7c3aed" : hasUrgent ? "1px solid #ef4444" : "1px solid #2d1b69", borderRadius: isMobile ? 5 : 8, padding: isMobile ? "4px 3px" : "6px", cursor: dayRows.length > 0 ? "pointer" : "default", position: "relative", overflow: "hidden" }}>
-              {hasUrgent && <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "pulse-red 1s ease-in-out infinite", display: "block" }} />}
+            <div
+              key={day}
+              onDragOver={e => { e.preventDefault(); setDragOverDay(day); }}
+              onDragLeave={() => setDragOverDay(null)}
+              onDrop={e => {
+                e.preventDefault();
+                const id = e.dataTransfer.getData("rowId");
+                if (id) {
+                  const newDate = `${pad(day)}/${pad(mes + 1)}/${year}`;
+                  onMovePost(id, newDate);
+                }
+                setDragOverDay(null);
+              }}
+              onClick={() => dayRows.length > 0 && onSelectDay(dayRows, day)}
+              style={{
+                minHeight: isMobile ? 54 : 80,
+                background: isDragOver
+                  ? "linear-gradient(135deg,#4a2a8a55,#7c3aed44)"
+                  : isToday
+                    ? "linear-gradient(135deg,#3d1b8a55,#7c3aed33)"
+                    : "#110828",
+                border: isDragOver
+                  ? "2px dashed #c084fc"
+                  : isToday
+                    ? "2px solid #7c3aed"
+                    : hasUrgent
+                      ? "1px solid #ef4444"
+                      : "1px solid #2d1b69",
+                borderRadius: isMobile ? 5 : 8,
+                padding: isMobile ? "4px 3px" : "6px",
+                cursor: dayRows.length > 0 ? "pointer" : "default",
+                position: "relative",
+                overflow: "hidden",
+                transition: "border 0.15s, background 0.15s",
+              }}
+            >
+              {hasUrgent && (
+                <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "pulse-red 1s ease-in-out infinite", display: "block" }} />
+              )}
               <div style={{ fontFamily: "'Cinzel', serif", fontSize: isToday ? (isMobile ? 12 : 13) : (isMobile ? 10 : 11), fontWeight: isToday ? 900 : 400, color: isToday ? "#c084fc" : "#5a3a8a", marginBottom: 2 }}>{day}</div>
+
               {!isMobile && dayRows.slice(0, 3).map(r => {
                 const sc = STATUS_COLORS[r.status];
                 return (
-                  <div key={r.id} style={{ background: sc.calBg, border: `1px solid ${sc.border}`, borderRadius: 4, padding: "2px 4px", marginBottom: 2, display: "flex", alignItems: "center", gap: 3 }}>
+                  <div
+                    key={r.id}
+                    draggable
+                    onDragStart={e => {
+                      e.dataTransfer.setData("rowId", r.id);
+                      e.stopPropagation();
+                      setDraggingId(r.id);
+                    }}
+                    onDragEnd={() => setDraggingId(null)}
+                    style={{
+                      background: sc.calBg,
+                      border: `1px solid ${sc.border}`,
+                      borderRadius: 4,
+                      padding: "2px 4px",
+                      marginBottom: 2,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 3,
+                      cursor: "grab",
+                      opacity: draggingId === r.id ? 0.4 : 1,
+                      transition: "opacity 0.15s",
+                      userSelect: "none",
+                    }}
+                    onClick={e => e.stopPropagation()}
+                  >
                     <span style={{ fontSize: 8 }}>{REDE_ICONS[r.rede] || "📄"}</span>
                     <span style={{ fontSize: 9, color: sc.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.tema || r.postagem}</span>
                   </div>
                 );
               })}
-              {!isMobile && dayRows.length > 3 && <div style={{ fontSize: 9, color: "#7c3aed", textAlign: "center" }}>+{dayRows.length - 3}</div>}
+
+              {!isMobile && dayRows.length > 3 && (
+                <div style={{ fontSize: 9, color: "#7c3aed", textAlign: "center" }}>+{dayRows.length - 3}</div>
+              )}
+
               {isMobile && dayRows.length > 0 && (
                 <div style={{ display: "flex", gap: 1, flexWrap: "wrap", marginTop: 2 }}>
-                  {dayRows.slice(0, 3).map(r => <div key={r.id} style={{ width: 6, height: 6, borderRadius: "50%", background: STATUS_COLORS[r.status].border }} />)}
+                  {dayRows.slice(0, 3).map(r => (
+                    <div
+                      key={r.id}
+                      draggable
+                      onDragStart={e => { e.dataTransfer.setData("rowId", r.id); setDraggingId(r.id); }}
+                      onDragEnd={() => setDraggingId(null)}
+                      style={{ width: 6, height: 6, borderRadius: "50%", background: STATUS_COLORS[r.status].border, cursor: "grab", opacity: draggingId === r.id ? 0.4 : 1 }}
+                    />
+                  ))}
                   {dayRows.length > 3 && <span style={{ fontSize: 7, color: "#7c3aed" }}>+{dayRows.length - 3}</span>}
                 </div>
               )}
@@ -800,7 +888,100 @@ function PostagemCard({ row, idx, onUpdate, onDuplicate, onRemove }: {
     </div>
   );
 }
+// ─── TableWithDrag ─────────────────────────────────────────────────────────
+function TableWithDrag({ filtered, loading, rows, updateRow, duplicateRow, removeRow, onReorder }: {
+  filtered: Row[];
+  loading: boolean;
+  rows: Row[];
+  updateRow: (id: string, key: keyof Row, val: string) => void;
+  duplicateRow: (r: Row) => void;
+  removeRow: (id: string) => void;
+  onReorder: (fromId: string, toId: string) => void;
+}) {
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
+  return (
+    <div style={{ overflowX: "auto", borderRadius: 16, border: "1px solid #4a2a8a", position: "relative" }}>
+      {loading && (
+        <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}>
+          <div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        </div>
+      )}
+      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 800 }}>
+        <thead>
+          <tr style={{ background: "linear-gradient(90deg,#2d1b69,#3d1b8a,#2d1b69)" }}>
+            <th style={{ width: 50, padding: "12px 8px", borderRight: "1px solid #4a2a8a" }} />
+            {COLS.map(col => (
+              <th key={col.key} style={{ width: col.width, padding: "12px 10px", textAlign: "left", fontFamily: "'Cinzel',serif", fontSize: 10, fontWeight: 700, color: "#c084fc", letterSpacing: 1, textTransform: "uppercase", borderRight: "1px solid #4a2a8a", whiteSpace: "nowrap" }}>{col.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {!loading && filtered.length === 0 && (
+            <tr><td colSpan={COLS.length + 1} style={{ padding: 48, textAlign: "center", color: "#5a3a8a", fontFamily: "'Cinzel',serif", fontSize: 13 }}>{rows.length === 0 ? "Nenhuma postagem ainda." : "Nenhuma com esse filtro."}</td></tr>
+          )}
+          {filtered.map((row, idx) => {
+            const urgency  = getUrgency(row.data, row.status);
+            const us       = urgency ? URGENCY_STYLES[urgency] : null;
+            const sc       = STATUS_COLORS[row.status];
+            const isDragOver = dragOverId === row.id && draggingId !== row.id;
+            const isDragging = draggingId === row.id;
+
+            const baseBg     = us ? us.rowBg : sc.rowBg;
+            const baseBorder = us ? us.border : sc.border;
+
+            return (
+              <tr
+                key={row.id}
+                draggable
+                onDragStart={e => {
+                  e.dataTransfer.setData("rowId", row.id);
+                  e.dataTransfer.effectAllowed = "move";
+                  setDraggingId(row.id);
+                }}
+                onDragEnd={() => { setDraggingId(null); setDragOverId(null); }}
+                onDragOver={e => { e.preventDefault(); if (draggingId !== row.id) setDragOverId(row.id); }}
+                onDragLeave={() => setDragOverId(null)}
+                onDrop={e => {
+                  e.preventDefault();
+                  const fromId = e.dataTransfer.getData("rowId");
+                  if (fromId && fromId !== row.id) onReorder(fromId, row.id);
+                  setDragOverId(null);
+                  setDraggingId(null);
+                }}
+                style={{
+                  background: isDragOver ? "#2d1b69" : baseBg,
+                  borderLeft: `3px solid ${baseBorder}`,
+                  opacity: isDragging ? 0.4 : 1,
+                  transition: "background 0.15s, opacity 0.15s",
+                  outline: isDragOver ? "2px dashed #c084fc" : "none",
+                  cursor: "grab",
+                }}
+                onMouseEnter={e => { if (!isDragging) e.currentTarget.style.background = "#1e0f45"; }}
+                onMouseLeave={e => { if (!isDragging) e.currentTarget.style.background = isDragOver ? "#2d1b69" : baseBg; }}
+              >
+                <td style={{ padding: "6px 4px", textAlign: "center", borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45", fontSize: 10, color: "#5a3a8a" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                    <span style={{ fontSize: 14, color: "#3d1b69", cursor: "grab", lineHeight: 1 }}>⠿</span>
+                    <span style={{ fontSize: 10, color: "#5a3a8a" }}>{idx + 1}</span>
+                    <button onClick={() => duplicateRow(row)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12 }} onMouseEnter={e => (e.currentTarget.style.color = "#c084fc")} onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}>📋</button>
+                    <button onClick={() => removeRow(row.id)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12 }} onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")} onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}>✕</button>
+                  </div>
+                </td>
+                {COLS.map(col => (
+                  <td key={col.key} style={{ padding: "4px 6px", borderRight: "1px solid #1e0f45", borderBottom: "1px solid #1e0f45", verticalAlign: "top" }}>
+                    <EditableCell value={String(row[col.key] ?? "")} onChange={val => updateRow(row.id, col.key, val)} type={col.type} options={col.options} placeholder={col.placeholder} wide={col.wide} urgency={col.key === "data" ? urgency : undefined} />
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 // ─── Dashboard ─────────────────────────────────────────────────────────────
 function Dashboard({ onVoltar }: { onVoltar: () => void }) {
   const isMobile = useIsMobile();
@@ -895,6 +1076,19 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
     if (pending) { clearTimeout(pending); pendingUpserts.current.delete(id); }
     setRowsSafe(prev => prev.filter(r => r.id !== id));
     try { await dbDelete(id); } catch { setSyncStatus("error"); }
+
+    const movePost = (rowId: string, newDateStr: string) => {
+      setRowsSafe(prev => {
+        const next = prev.map(r => {
+          if (r.id !== rowId) return r;
+          const d = parseDateBR(newDateStr);
+          const updated = { ...r, data: newDateStr, mes: d ? d.getMonth() : r.mes };
+          scheduleUpsert(updated);
+          return updated;
+        });
+        return next;
+      });
+    };
   };
 
   const dInicio = parseDateBR(filterDataInicio);
@@ -997,7 +1191,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
             <div>
               <div style={{ borderRadius: 16, border: "1px solid #4a2a8a", padding: isMobile ? "10px 8px" : "16px", background: "#0d072088", position: "relative" }}>
                 {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-                <CalendarView rows={filtered} mes={mes} onSelectDay={(r, d) => setSelectedDay(prev => prev?.day === d ? null : { day: d, rows: r })} isMobile={isMobile} />
+                <CalendarView rows={filtered} mes={mes} onSelectDay={(r, d) => setSelectedDay(prev => prev?.day === d ? null : { day: d, rows: r })} isMobile={isMobile} onMovePost={movePost} />
               </div>
               {selectedDay && <DayPanel day={selectedDay.day} mes={mes} rows={selectedDay.rows} onClose={() => setSelectedDay(null)} isMobile={isMobile} />}
               <button onClick={addRow} style={{ marginTop: 14, background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, cursor: "pointer", width: isMobile ? "100%" : "auto" }}>+ Adicionar Postagem</button>
@@ -1007,7 +1201,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
 
 
 {/* Tabela */}
-          {viewMode === "tabela" && (
+{viewMode === "tabela" && (
   <>
     {isMobile ? (
       <div style={{ position: "relative" }}>
@@ -1016,49 +1210,29 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
         {filtered.map((row, idx) => <PostagemCard key={row.id} row={row} idx={idx} onUpdate={updateRow} onDuplicate={duplicateRow} onRemove={removeRow} />)}
       </div>
     ) : (
-      <div style={{ overflowX: "auto", borderRadius: 16, border: "1px solid #4a2a8a", position: "relative" }}>
-        {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 800 }}>
-          <thead>
-            <tr style={{ background: "linear-gradient(90deg,#2d1b69,#3d1b8a,#2d1b69)" }}>
-              <th style={{ width: 50, padding: "12px 8px", borderRight: "1px solid #4a2a8a" }} />
-              {COLS.map(col => <th key={col.key} style={{ width: col.width, padding: "12px 10px", textAlign: "left", fontFamily: "'Cinzel',serif", fontSize: 10, fontWeight: 700, color: "#c084fc", letterSpacing: 1, textTransform: "uppercase", borderRight: "1px solid #4a2a8a", whiteSpace: "nowrap" }}>{col.label}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {!loading && filtered.length === 0 && <tr><td colSpan={COLS.length+1} style={{ padding: 48, textAlign: "center", color: "#5a3a8a", fontFamily: "'Cinzel',serif", fontSize: 13 }}>{rows.length === 0 ? "Nenhuma postagem ainda." : "Nenhuma com esse filtro."}</td></tr>}
-            {filtered.map((row, idx) => {
-              const urgency = getUrgency(row.data, row.status);
-              const us = urgency ? URGENCY_STYLES[urgency] : null;
-              const sc = STATUS_COLORS[row.status];
-              const baseBg = us ? us.rowBg : sc.rowBg;
-              const baseBorder = us ? us.border : sc.border;
-              return (
-                <tr key={row.id} style={{ background: baseBg, borderLeft: `3px solid ${baseBorder}` }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#1e0f45")}
-                  onMouseLeave={e => (e.currentTarget.style.background = baseBg)}>
-                  <td style={{ padding: "6px 4px", textAlign: "center", borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45", fontSize: 10, color: "#5a3a8a" }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                      <span>{idx+1}</span>
-                      <button onClick={() => duplicateRow(row)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12 }} onMouseEnter={e => (e.currentTarget.style.color="#c084fc")} onMouseLeave={e => (e.currentTarget.style.color="#5a3a8a")}>📋</button>
-                      <button onClick={() => removeRow(row.id)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12 }} onMouseEnter={e => (e.currentTarget.style.color="#ef4444")} onMouseLeave={e => (e.currentTarget.style.color="#5a3a8a")}>✕</button>
-                    </div>
-                  </td>
-                  {COLS.map(col => (
-                    <td key={col.key} style={{ padding: "4px 6px", borderRight: "1px solid #1e0f45", borderBottom: "1px solid #1e0f45", verticalAlign: "top" }}>
-                      <EditableCell value={String(row[col.key] ?? "")} onChange={val => updateRow(row.id, col.key, val)} type={col.type} options={col.options} placeholder={col.placeholder} wide={col.wide} urgency={col.key === "data" ? urgency : undefined} />
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <TableWithDrag
+        filtered={filtered}
+        loading={loading}
+        rows={rows}
+        updateRow={updateRow}
+        duplicateRow={duplicateRow}
+        removeRow={removeRow}
+        onReorder={(fromId, toId) => {
+          setRowsSafe(prev => {
+            const next = [...prev];
+            const fromIdx = next.findIndex(r => r.id === fromId);
+            const toIdx   = next.findIndex(r => r.id === toId);
+            if (fromIdx < 0 || toIdx < 0) return prev;
+            const [moved] = next.splice(fromIdx, 1);
+            next.splice(toIdx, 0, moved);
+            return next;
+          });
+        }}
+      />
     )}
     <button onClick={addRow} style={{ marginTop: 14, background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel',serif", fontSize: 13, fontWeight: 700, cursor: "pointer", width: isMobile ? "100%" : "auto" }}>+ Adicionar Postagem</button>
-    </>
-          )}
+  </>
+)}
         </>
       )}
 
