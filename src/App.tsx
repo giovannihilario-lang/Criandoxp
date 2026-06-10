@@ -66,6 +66,19 @@ function getUrgency(dateStr: string, status: Status): Urgency {
   return null;
 }
 
+function drivePreviewUrl(url: string): string | null {
+  if (!url) return null;
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
+  return url.startsWith("http") ? url : null;
+}
+
+function driveThumbnailUrl(url: string): string | null {
+  const match = url?.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w400`;
+  return null;
+}
+
 const URGENCY_STYLES: Record<NonNullable<Urgency>, { border: string; rowBg: string; badge: string; badgeBg: string; badgeColor: string; anim: string }> = {
   hoje:   { border: "#ef4444", rowBg: "rgba(239,68,68,0.13)",   badge: "HOJE",   badgeBg: "#ef4444", badgeColor: "#fff",    anim: "pulse-red 1s ease-in-out infinite" },
   amanha: { border: "#f59e0b", rowBg: "rgba(245,158,11,0.12)",  badge: "AMANHÃ", badgeBg: "#f59e0b", badgeColor: "#1a0d3a", anim: "pulse-yellow 1.5s ease-in-out infinite" },
@@ -86,6 +99,7 @@ interface Row {
   status: Status;
   observacoes: string;
   mes: number;
+  link_arquivo: string;
 }
 
 interface Lead {
@@ -122,6 +136,7 @@ const COLS: ColDef[] = [
   { key: "formato",     label: "🎞 Formato",     width: 110, type: "select-simple", options: FORMATO_OPTIONS },
   { key: "tema",        label: "✨ Tema",         width: 160, type: "text",          placeholder: "Título / tema", wide: true },
   { key: "responsavel", label: "👤 Responsável", width: 120, type: "text",          placeholder: "Nome" },
+  { key: "link_arquivo", label: "🔗 Arquivo", width: 160, type: "text", placeholder: "Link do Drive" },
   { key: "status",      label: "🔮 Status",      width: 130, type: "select",        options: STATUS_OPTIONS },
 ];
 
@@ -129,7 +144,7 @@ const makeRow = (n: number, mes: number): Row => ({
   id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
   postagem: `Postagem ${n}`, data: "", tema: "", briefing: "",
   formato: "", rede: "", responsavel: "", status: "Planejado",
-  observacoes: "", mes,
+  observacoes: "", mes,link_arquivo: "",
 });
 
 // ─── Supabase ops ──────────────────────────────────────────────────────────
@@ -209,7 +224,55 @@ const GLOBAL_CSS = `
   input::placeholder { color: #5a3a8a; }
   select, button, input { -webkit-tap-highlight-color: transparent; }
 `;
+function ArquivoPreview({ url }: { url: string }) {
+  const [open, setOpen] = useState(false);
+  if (!url) return null;
+  const previewUrl = drivePreviewUrl(url);
+  const thumb = driveThumbnailUrl(url);
 
+  return (
+    <>
+      <div
+        onClick={() => setOpen(true)}
+        style={{ cursor: "pointer", marginTop: 6, borderRadius: 8, overflow: "hidden", border: "1px solid #4a2a8a", position: "relative", background: "#0d0720" }}
+      >
+        {thumb ? (
+          <img src={thumb} alt="preview" style={{ width: "100%", maxHeight: 120, objectFit: "cover", display: "block" }} />
+        ) : (
+          <div style={{ padding: "12px", fontFamily: "'Cinzel',serif", fontSize: 11, color: "#7c3aed", textAlign: "center" }}>
+            🔗 Abrir arquivo
+          </div>
+        )}
+        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.2s" }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+          onMouseLeave={e => (e.currentTarget.style.opacity = "0")}>
+          <span style={{ color: "#fff", fontFamily: "'Cinzel',serif", fontSize: 12 }}>▶ Visualizar</span>
+        </div>
+      </div>
+
+      {open && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+          onClick={() => setOpen(false)}>
+          <div style={{ width: "100%", maxWidth: 900, background: "#0d0720", borderRadius: 16, overflow: "hidden", border: "1px solid #4a2a8a", position: "relative" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #2d1b69" }}>
+              <span style={{ fontFamily: "'Cinzel',serif", fontSize: 12, color: "#c084fc" }}>📎 Preview do Arquivo</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <a href={url} target="_blank" rel="noreferrer"
+                  style={{ background: "#1a0d3a", border: "1px solid #4a2a8a", borderRadius: 6, color: "#c9a0f5", fontSize: 11, padding: "5px 10px", fontFamily: "'Cinzel',serif", textDecoration: "none" }}>
+                  Abrir no Drive ↗
+                </a>
+                <button onClick={() => setOpen(false)}
+                  style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: "#5a3a8a", cursor: "pointer", padding: "5px 10px", fontFamily: "'Cinzel',serif", fontSize: 12 }}>✕</button>
+              </div>
+            </div>
+            <iframe src={previewUrl!} style={{ width: "100%", height: "70vh", border: "none" }} allow="autoplay" />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 // ─── EditableCell ──────────────────────────────────────────────────────────
 function EditableCell({ value, onChange, type = "text", options, placeholder, wide, urgency }: {
   value: string; onChange: (v: string) => void;
@@ -428,6 +491,12 @@ function DayPanel({ day, mes, rows, onClose, isMobile }: { day: number; mes: num
                 <span style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.border}`, borderRadius: 5, padding: "2px 7px", fontSize: 10, fontFamily: "'Cinzel', serif", fontWeight: 700 }}>{r.status}</span>
                 {us && <span style={{ marginLeft: 6, background: us.badgeBg, color: us.badgeColor, fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel', serif", borderRadius: 4, padding: "1px 5px", animation: us.anim }}>{us.badge}</span>}
               </div>
+              {r.link_arquivo && (
+  <div style={{ gridColumn: "1 / -1" }}>
+    <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>ARQUIVO</div>
+    <ArquivoPreview url={r.link_arquivo} />
+  </div>
+)}
             </div>
           );
         })}
@@ -877,6 +946,12 @@ function PostagemCard({ row, idx, onUpdate, onDuplicate, onRemove }: {
           <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel',serif", marginBottom: 2, letterSpacing: 1 }}>👤 RESPONSÁVEL</div>
           <EditableCell value={row.responsavel} onChange={v => onUpdate(row.id, "responsavel", v)} placeholder="Nome" />
         </div>
+        {row.link_arquivo && (
+  <div style={{ gridColumn: "1 / -1" }}>
+    <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel',serif", marginBottom: 2, letterSpacing: 1 }}>🔗 ARQUIVO</div>
+    <ArquivoPreview url={row.link_arquivo} />
+  </div>
+)}
         <div style={{ gridColumn: "1 / -1" }}>
           <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel',serif", marginBottom: 4, letterSpacing: 1 }}>🔮 STATUS</div>
           <select value={row.status} onChange={e => onUpdate(row.id, "status", e.target.value)} style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.border}`, borderRadius: 6, padding: "8px", fontSize: 13, fontFamily: "'Cinzel',serif", fontWeight: 700, cursor: "pointer", width: "100%", outline: "none" }}>
