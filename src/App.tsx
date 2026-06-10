@@ -269,7 +269,7 @@ function ArquivoPreview({ url }: { url: string }) {
       {open && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
           onClick={() => { setOpen(false); setSlide(0); }}>
-          <div style={{ width: "100%", maxWidth: 900, background: "#0d0720", borderRadius: 16, overflow: "hidden", border: "1px solid #4a2a8a" }}
+          <div style={{ width: "100%", maxWidth: 900, maxHeight: "90vh", background: "#0d0720", borderRadius: 16, overflow: "hidden", border: "1px solid #4a2a8a", display: "flex", flexDirection: "column" }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #2d1b69" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -293,7 +293,7 @@ function ArquivoPreview({ url }: { url: string }) {
                   style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: "#5a3a8a", cursor: "pointer", padding: "5px 10px", fontFamily: "'Cinzel',serif", fontSize: 12 }}>✕</button>
               </div>
             </div>
-            <iframe src={previewUrl!} style={{ width: "100%", height: "70vh", border: "none" }} allow="autoplay" />
+            <iframe src={previewUrl!} style={{ width: "100%", flex: 1, minHeight: 0, border: "none" }} allow="autoplay" />
           </div>
         </div>
       )}
