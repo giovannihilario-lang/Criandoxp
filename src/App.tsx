@@ -267,7 +267,7 @@ function ArquivoPreview({ url }: { url: string }) {
       </div>
 
       {open && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "10px 8px", overflowY: "auto" }}
           onClick={() => { setOpen(false); setSlide(0); }}>
           <div style={{ width: "100%", maxWidth: 900, maxHeight: "90vh", background: "#0d0720", borderRadius: 16, overflow: "hidden", border: "1px solid #4a2a8a", display: "flex", flexDirection: "column" }}
             onClick={e => e.stopPropagation()}>
