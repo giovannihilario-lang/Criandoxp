@@ -344,24 +344,24 @@ function PostCardCliente({
 
       {/* Modal de preview */}
       {previewOpen && previewUrl && (
-        <div
-          style={{
-            position: "fixed", inset: 0,
-            background: "rgba(0,0,0,0.9)", zIndex: 9999,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 16,
-          }}
-          onClick={() => setPreviewOpen(false)}
-        >
-          <div
-            style={{
-              width: "100%", maxWidth: 900,
-              background: "#0d0720", borderRadius: 16,
-              border: "1px solid #4a2a8a", overflow: "hidden",
-              animation: "popIn 0.2s ease",
-            }}
-            onClick={e => e.stopPropagation()}
-          >
+  <div
+    style={{
+      position: "fixed", inset: 0,
+      background: "rgba(0,0,0,0.9)", zIndex: 9999,
+      display: "flex", alignItems: "flex-start", justifyContent: "center",
+      padding: "8px", overflowY: "auto",
+    }}
+    onClick={() => setPreviewOpen(false)}
+  >
+    <div
+      style={{
+        width: "100%", maxWidth: 900,
+        background: "#0d0720", borderRadius: 16,
+        border: "1px solid #4a2a8a", overflow: "hidden",
+        animation: "popIn 0.2s ease",
+      }}
+      onClick={e => e.stopPropagation()}
+    >
             <div style={{
               display: "flex", justifyContent: "space-between", alignItems: "center",
               padding: "12px 16px", borderBottom: "1px solid #2d1b69",
