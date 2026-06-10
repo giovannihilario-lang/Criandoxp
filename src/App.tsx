@@ -267,33 +267,48 @@ function ArquivoPreview({ url }: { url: string }) {
       </div>
 
       {open && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "10px 8px", overflowY: "auto" }}
-          onClick={() => { setOpen(false); setSlide(0); }}>
-          <div style={{ width: "100%", maxWidth: 900, maxHeight: "90vh", background: "#0d0720", borderRadius: 16, overflow: "hidden", border: "1px solid #4a2a8a", display: "flex", flexDirection: "column" }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #2d1b69" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontFamily: "'Cinzel',serif", fontSize: 12, color: "#c084fc" }}>📎 Preview</span>
-                {links.length > 1 && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <button onClick={() => setSlide(s => Math.max(0, s - 1))} disabled={slide === 0}
-                      style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: slide === 0 ? "#3d1b69" : "#c084fc", cursor: slide === 0 ? "default" : "pointer", padding: "4px 10px", fontSize: 13 }}>‹</button>
-                    <span style={{ fontFamily: "'Cinzel',serif", fontSize: 11, color: "#5a3a8a" }}>{slide + 1}/{links.length}</span>
-                    <button onClick={() => setSlide(s => Math.min(links.length - 1, s + 1))} disabled={slide === links.length - 1}
-                      style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: slide === links.length - 1 ? "#3d1b69" : "#c084fc", cursor: slide === links.length - 1 ? "default" : "pointer", padding: "4px 10px", fontSize: 13 }}>›</button>
-                  </div>
-                )}
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "8px", overflowY: "auto" }}
+          onClick={() => { setOpen(false); setSlide(0); }}
+        >
+          <div
+            style={{ width: "100%", maxWidth: 900, background: "#0d0720", borderRadius: 16, overflow: "hidden", border: "1px solid #4a2a8a" }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #2d1b69", flexWrap: "wrap", gap: 6 }}>
+              <span style={{ fontFamily: "'Cinzel',serif", fontSize: 12, color: "#c084fc" }}>📎 Preview</span>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <a href={links[slide]} target="_blank" rel="noreferrer"
                   style={{ background: "#1a0d3a", border: "1px solid #4a2a8a", borderRadius: 6, color: "#c9a0f5", fontSize: 11, padding: "5px 10px", fontFamily: "'Cinzel',serif", textDecoration: "none" }}>
-                  Abrir no Drive ↗
+                  Drive ↗
                 </a>
                 <button onClick={() => { setOpen(false); setSlide(0); }}
                   style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: "#5a3a8a", cursor: "pointer", padding: "5px 10px", fontFamily: "'Cinzel',serif", fontSize: 12 }}>✕</button>
               </div>
             </div>
-            <iframe src={previewUrl!} style={{ width: "100%", flex: 1, minHeight: 0, border: "none" }} allow="autoplay" />
+
+            {/* Navegação */}
+            {links.length > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#0d0720", borderBottom: "1px solid #2d1b69" }}>
+                <button
+                  onClick={() => setSlide(s => Math.max(0, s - 1))}
+                  disabled={slide === 0}
+                  style={{ background: slide === 0 ? "#1a0d3a" : "#4a2a8a", border: "none", borderRadius: 8, color: slide === 0 ? "#3d1b69" : "#fff", cursor: slide === 0 ? "default" : "pointer", padding: "8px 20px", fontFamily: "'Cinzel',serif", fontSize: 16, fontWeight: 700 }}>
+                  ‹ Anterior
+                </button>
+                <span style={{ fontFamily: "'Cinzel',serif", fontSize: 12, color: "#c084fc" }}>{slide + 1} / {links.length}</span>
+                <button
+                  onClick={() => setSlide(s => Math.min(links.length - 1, s + 1))}
+                  disabled={slide === links.length - 1}
+                  style={{ background: slide === links.length - 1 ? "#1a0d3a" : "#4a2a8a", border: "none", borderRadius: 8, color: slide === links.length - 1 ? "#3d1b69" : "#fff", cursor: slide === links.length - 1 ? "default" : "pointer", padding: "8px 20px", fontFamily: "'Cinzel',serif", fontSize: 16, fontWeight: 700 }}>
+                  Próximo ›
+                </button>
+              </div>
+            )}
+
+            {/* iframe */}
+            <iframe src={previewUrl!} style={{ width: "100%", height: "65vh", border: "none", display: "block" }} allow="autoplay" />
           </div>
         </div>
       )}
