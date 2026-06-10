@@ -48,18 +48,21 @@ function parseDateBR(dateStr: string): Date | null {
   return isNaN(date.getTime()) ? null : date;
 }
 
-function drivePreviewUrl(url: string): string | null {
-  if (!url) return null;
-  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
-  return url.startsWith("http") ? url : null;
-}
-
-function driveThumbnailUrl(url: string): string | null {
-  const match = url?.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w400`;
-  return null;
-}
+function driveFileId(url: string): string | null {
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    return match ? match[1] : null;
+  }
+  
+  function drivePreviewUrl(url: string): string | null {
+    const id = driveFileId(url);
+    if (id) return `https://drive.google.com/file/d/${id}/preview`;
+    return url.startsWith("http") ? url : null;
+  }
+  
+  function driveThumbnailUrl(url: string): string | null {
+    const id = driveFileId(url);
+    return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : null;
+  }
 
 // ─── Supabase ops ──────────────────────────────────────────────────────────
 async function loadPostsDoMes(mes: number): Promise<Post[]> {

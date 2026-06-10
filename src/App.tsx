@@ -66,17 +66,24 @@ function getUrgency(dateStr: string, status: Status): Urgency {
   return null;
 }
 
-function drivePreviewUrl(url: string): string | null {
-  if (!url) return null;
+function driveFileId(url: string): string | null {
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
+  return match ? match[1] : null;
+}
+
+function parseLinks(raw: string): string[] {
+  return raw.split(",").map(s => s.trim()).filter(Boolean);
+}
+
+function drivePreviewUrl(url: string): string | null {
+  const id = driveFileId(url);
+  if (id) return `https://drive.google.com/file/d/${id}/preview`;
   return url.startsWith("http") ? url : null;
 }
 
 function driveThumbnailUrl(url: string): string | null {
-  const match = url?.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w400`;
-  return null;
+  const id = driveFileId(url);
+  return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : null;
 }
 
 const URGENCY_STYLES: Record<NonNullable<Urgency>, { border: string; rowBg: string; badge: string; badgeBg: string; badgeColor: string; anim: string }> = {
@@ -226,9 +233,12 @@ const GLOBAL_CSS = `
 `;
 function ArquivoPreview({ url }: { url: string }) {
   const [open, setOpen] = useState(false);
-  if (!url) return null;
-  const previewUrl = drivePreviewUrl(url);
-  const thumb = driveThumbnailUrl(url);
+  const [slide, setSlide] = useState(0);
+  const links = parseLinks(url);
+  if (links.length === 0) return null;
+
+  const previewUrl = drivePreviewUrl(links[slide]);
+  const thumb = driveThumbnailUrl(links[0]);
 
   return (
     <>
@@ -240,7 +250,12 @@ function ArquivoPreview({ url }: { url: string }) {
           <img src={thumb} alt="preview" style={{ width: "100%", maxHeight: 120, objectFit: "cover", display: "block" }} />
         ) : (
           <div style={{ padding: "12px", fontFamily: "'Cinzel',serif", fontSize: 11, color: "#7c3aed", textAlign: "center" }}>
-            🔗 Abrir arquivo
+            🔗 {links.length} arquivo{links.length > 1 ? "s" : ""}
+          </div>
+        )}
+        {links.length > 1 && (
+          <div style={{ position: "absolute", bottom: 6, right: 6, background: "#7c3aed", color: "#fff", borderRadius: 20, padding: "2px 8px", fontSize: 10, fontFamily: "'Cinzel',serif" }}>
+            1/{links.length}
           </div>
         )}
         <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.2s" }}
@@ -252,17 +267,28 @@ function ArquivoPreview({ url }: { url: string }) {
 
       {open && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
-          onClick={() => setOpen(false)}>
-          <div style={{ width: "100%", maxWidth: 900, background: "#0d0720", borderRadius: 16, overflow: "hidden", border: "1px solid #4a2a8a", position: "relative" }}
+          onClick={() => { setOpen(false); setSlide(0); }}>
+          <div style={{ width: "100%", maxWidth: 900, background: "#0d0720", borderRadius: 16, overflow: "hidden", border: "1px solid #4a2a8a" }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #2d1b69" }}>
-              <span style={{ fontFamily: "'Cinzel',serif", fontSize: 12, color: "#c084fc" }}>📎 Preview do Arquivo</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontFamily: "'Cinzel',serif", fontSize: 12, color: "#c084fc" }}>📎 Preview</span>
+                {links.length > 1 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button onClick={() => setSlide(s => Math.max(0, s - 1))} disabled={slide === 0}
+                      style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: slide === 0 ? "#3d1b69" : "#c084fc", cursor: slide === 0 ? "default" : "pointer", padding: "4px 10px", fontSize: 13 }}>‹</button>
+                    <span style={{ fontFamily: "'Cinzel',serif", fontSize: 11, color: "#5a3a8a" }}>{slide + 1}/{links.length}</span>
+                    <button onClick={() => setSlide(s => Math.min(links.length - 1, s + 1))} disabled={slide === links.length - 1}
+                      style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: slide === links.length - 1 ? "#3d1b69" : "#c084fc", cursor: slide === links.length - 1 ? "default" : "pointer", padding: "4px 10px", fontSize: 13 }}>›</button>
+                  </div>
+                )}
+              </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <a href={url} target="_blank" rel="noreferrer"
+                <a href={links[slide]} target="_blank" rel="noreferrer"
                   style={{ background: "#1a0d3a", border: "1px solid #4a2a8a", borderRadius: 6, color: "#c9a0f5", fontSize: 11, padding: "5px 10px", fontFamily: "'Cinzel',serif", textDecoration: "none" }}>
                   Abrir no Drive ↗
                 </a>
-                <button onClick={() => setOpen(false)}
+                <button onClick={() => { setOpen(false); setSlide(0); }}
                   style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: "#5a3a8a", cursor: "pointer", padding: "5px 10px", fontFamily: "'Cinzel',serif", fontSize: 12 }}>✕</button>
               </div>
             </div>
@@ -273,6 +299,7 @@ function ArquivoPreview({ url }: { url: string }) {
     </>
   );
 }
+
 // ─── EditableCell ──────────────────────────────────────────────────────────
 function EditableCell({ value, onChange, type = "text", options, placeholder, wide, urgency }: {
   value: string; onChange: (v: string) => void;
