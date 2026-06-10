@@ -1357,7 +1357,6 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
 }
 
 // ─── App Root ──────────────────────────────────────────────────────────────
-import RevisaoCliente from "./RevisaoCliente";
 
 export default function App() {
   if (window.location.pathname === "/revisar") return <RevisaoCliente />;
