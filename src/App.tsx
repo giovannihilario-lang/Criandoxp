@@ -22,7 +22,7 @@ const FORMATO_OPTIONS = ["Post","Reels","Story","Carrossel","Live","Shorts","Thr
 const REDE_OPTIONS = ["Instagram","TikTok","YouTube","Twitter/X","Facebook","Todos"];
 type Status = typeof STATUS_OPTIONS[number];
 type ViewMode = "tabela" | "calendario";
-type AppTab = "calendario" | "trafego" | "leads";
+type AppTab = "calendario" | "trafego" | "leads" | "revisao";
 type AppPage = "landing" | "dashboard";
 
 const REDE_ICONS: Record<string, string> = {
@@ -1094,6 +1094,113 @@ function TableWithDrag({ filtered, loading, rows, updateRow, duplicateRow, remov
   );
 }
 // ─── Dashboard ─────────────────────────────────────────────────────────────
+function RevisaoView({ isMobile }: { isMobile: boolean }) {
+  const [posts, setPosts] = useState<any[]>([]);
+  const [revisoes, setRevisoes] = useState<Record<string, any>>({});
+  const [mes, setMes] = useState(new Date().getMonth());
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/postagens?select=*`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+      }).then(r => r.json()),
+      fetch(`${SUPABASE_URL}/rest/v1/revisoes?select=*`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+      }).then(r => r.json()),
+    ]).then(([allPosts, allRevisoes]) => {
+      const filtered = allPosts.filter((p: any) => {
+        if (!p.link_arquivo) return false;
+        const d = parseDateBR(p.data);
+        return d ? d.getMonth() === mes : false;
+      });
+      setPosts(filtered);
+      const map: Record<string, any> = {};
+      allRevisoes.forEach((r: any) => { map[r.postagem_id] = r; });
+      setRevisoes(map);
+    }).catch(console.error).finally(() => setLoading(false));
+  }, [mes]);
+
+  const aprovados  = Object.values(revisoes).filter((r: any) => r.status === "aprovado").length;
+  const rejeitados = Object.values(revisoes).filter((r: any) => r.status === "rejeitado").length;
+  const pendentes  = posts.length - aprovados - rejeitados;
+
+  const selectStyle: React.CSSProperties = { background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 8, padding: "9px 10px", fontFamily: "'Cinzel', serif", fontSize: 13, cursor: "pointer", outline: "none" };
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center", flexWrap: "wrap" }}>
+        <select value={mes} onChange={e => setMes(Number(e.target.value))} style={selectStyle}>
+          {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+        </select>
+        <span style={{ fontFamily: "'Cinzel',serif", fontSize: 10, color: "#5a3a8a", letterSpacing: 2 }}>
+          · LINK DO CLIENTE: <a href="/revisar" target="_blank" style={{ color: "#7c3aed" }}>seusite.vercel.app/revisar</a>
+        </span>
+      </div>
+
+      {/* Stats */}
+      {!loading && posts.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 24 }}>
+          {[
+            { label: "Pendentes",  val: pendentes,  color: "#c084fc", bg: "#3d2068", border: "#6b3fa0" },
+            { label: "Aprovados",  val: aprovados,  color: "#86efac", bg: "#1a3a1a", border: "#16a34a" },
+            { label: "Ajustes",    val: rejeitados, color: "#fca5a5", bg: "#3a1a1a", border: "#dc2626" },
+          ].map(s => (
+            <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
+              <div style={{ fontSize: isMobile ? 22 : 28, fontWeight: 900, color: s.color, fontFamily: "'Cinzel',serif" }}>{s.val}</div>
+              <div style={{ fontSize: 9, color: s.color, opacity: 0.8, fontFamily: "'Cinzel',serif", letterSpacing: 1 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {loading && <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
+
+      {!loading && posts.length === 0 && (
+        <div style={{ textAlign: "center", padding: 60, color: "#5a3a8a", fontFamily: "'Cinzel',serif", fontSize: 13 }}>
+          Nenhum post com arquivo em {MONTHS[mes]}.
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)", gap: 14 }}>
+        {posts.map(post => {
+          const rev = revisoes[post.id];
+          const links = parseLinks(post.link_arquivo || "");
+          const thumb = driveThumbnailUrl(links[0] || "");
+          const statusColor = rev?.status === "aprovado" ? "#16a34a" : rev?.status === "rejeitado" ? "#dc2626" : "#4a2a8a";
+          const statusLabel = rev?.status === "aprovado" ? "✓ Aprovado" : rev?.status === "rejeitado" ? "✕ Ajuste pedido" : "⏳ Pendente";
+
+          return (
+            <div key={post.id} style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: `1px solid ${statusColor}`, borderLeft: `4px solid ${statusColor}`, borderRadius: 14, overflow: "hidden" }}>
+              {thumb && <img src={thumb} alt="preview" style={{ width: "100%", maxHeight: 160, objectFit: "cover", display: "block" }} />}
+              <div style={{ padding: "14px 16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontFamily: "'Cinzel',serif", fontSize: 14, fontWeight: 700, color: "#e2d0ff", marginBottom: 4 }}>{post.tema || post.postagem}</div>
+                    <div style={{ fontFamily: "'Cinzel',serif", fontSize: 10, color: "#5a3a8a" }}>
+                      {REDE_ICONS[post.rede] || ""} {post.rede} · {post.formato} · {post.data}
+                    </div>
+                  </div>
+                  <span style={{ background: statusColor, color: "#fff", borderRadius: 20, padding: "3px 10px", fontSize: 10, fontFamily: "'Cinzel',serif", fontWeight: 700, flexShrink: 0 }}>{statusLabel}</span>
+                </div>
+                {rev?.comentario && (
+                  <div style={{ background: "#0d0720", border: "1px solid #2d1b69", borderRadius: 8, padding: "8px 12px", fontFamily: "'Lato',sans-serif", fontSize: 12, color: "#a78bfa", fontStyle: "italic" }}>
+                    💬 "{rev.comentario}"
+                  </div>
+                )}
+                <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                  <ArquivoPreview url={post.link_arquivo} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ onVoltar }: { onVoltar: () => void }) {
   const isMobile = useIsMobile();
   const [rows, setRows]             = useState<Row[]>([]);
@@ -1231,8 +1338,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'Cinzel', serif", fontSize: isMobile ? 18 : 24, fontWeight: 900, background: "linear-gradient(90deg,#c084fc,#818cf8,#a855f7)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>Criando XP</div>
           <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#7c3aed", letterSpacing: 3, textTransform: "uppercase" }}>
-            {appTab === "calendario" ? "Calendário de Postagem" : appTab === "trafego" ? "Tráfego Pago · Meta Ads" : "Leads & Clientes"}
-          </div>
+          {appTab === "calendario" ? "Calendário de Postagem" : appTab === "trafego" ? "Tráfego Pago · Meta Ads" : appTab === "leads" ? "Leads & Clientes" : "Revisão de Conteúdo"}          </div>
         </div>
         <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-end" : "center", gap: 8, width: isMobile ? "100%" : "auto" }}>
           {appTab === "calendario" && urgentCount > 0 && (
@@ -1241,7 +1347,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
           {appTab === "calendario" && <span style={{ fontSize: 10, color: syncColor, animation: syncStatus === "saving" ? "blink 1s infinite" : "none" }}>{syncLabel}</span>}
           <button onClick={onVoltar} style={{ background: "transparent", border: "1px solid #4a2a8a", color: "#7c3aed", borderRadius: 8, padding: "6px 14px", fontFamily: "'Cinzel', serif", fontSize: 11, cursor: "pointer", letterSpacing: 1 }}>← Voltar</button>
           <div style={{ display: "flex", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, overflow: "hidden", width: isMobile ? "100%" : "auto" }}>
-            {([["calendario","📅"], ["trafego","📊"], ["leads","👥"]] as [AppTab,string][]).map(([tab, icon]) => (
+          {([["calendario","📅"], ["trafego","📊"], ["leads","👥"], ["revisao","📋"]] as [AppTab,string][]).map(([tab, icon]) => (
               <button key={tab} onClick={() => setAppTab(tab)}
                 style={{ flex: isMobile ? 1 : undefined, background: appTab === tab ? "linear-gradient(135deg,#4a2a8a,#7c3aed)" : "transparent", color: appTab === tab ? "#fff" : "#5a3a8a", border: "none", padding: isMobile ? "10px 0" : "8px 14px", fontFamily: "'Cinzel', serif", fontSize: isMobile ? 12 : 11, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>
                 {icon}
@@ -1348,6 +1454,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
 
       {appTab === "trafego" && <TrafegoView isMobile={isMobile} />}
       {appTab === "leads"   && <LeadsView   isMobile={isMobile} />}
+      {appTab === "revisao"  && <RevisaoView  isMobile={isMobile} />}
 
       <div style={{ marginTop: 36, textAlign: "center", color: "#3d1b69", fontSize: 10, fontFamily: "'Cinzel', serif", letterSpacing: 2 }}>
         🎲 CRIANDO XP · DASHBOARD INTERNO
