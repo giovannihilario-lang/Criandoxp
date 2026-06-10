@@ -1071,10 +1071,13 @@ function TableWithDrag({ filtered, loading, rows, updateRow, duplicateRow, remov
                   </div>
                 </td>
                 {COLS.map(col => (
-                  <td key={col.key} style={{ padding: "4px 6px", borderRight: "1px solid #1e0f45", borderBottom: "1px solid #1e0f45", verticalAlign: "top" }}>
-                    <EditableCell value={String(row[col.key] ?? "")} onChange={val => updateRow(row.id, col.key, val)} type={col.type} options={col.options} placeholder={col.placeholder} wide={col.wide} urgency={col.key === "data" ? urgency : undefined} />
-                  </td>
-                ))}
+  <td key={col.key} style={{ padding: "4px 6px", borderRight: "1px solid #1e0f45", borderBottom: "1px solid #1e0f45", verticalAlign: "top" }}>
+    <EditableCell value={String(row[col.key] ?? "")} onChange={val => updateRow(row.id, col.key, val)} type={col.type} options={col.options} placeholder={col.placeholder} wide={col.wide} urgency={col.key === "data" ? urgency : undefined} />
+    {col.key === "link_arquivo" && row.link_arquivo && (
+      <ArquivoPreview url={row.link_arquivo} />
+    )}
+  </td>
+))}
               </tr>
             );
           })}
