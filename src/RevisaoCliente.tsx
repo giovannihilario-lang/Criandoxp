@@ -49,9 +49,13 @@ function parseDateBR(dateStr: string): Date | null {
 }
 
 function driveFileId(url: string): string | null {
-    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    return match ? match[1] : null;
-  }
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+}
+
+function parseLinks(raw: string): string[] {
+  return raw.split(",").map(s => s.trim()).filter(Boolean);
+}
   
   function drivePreviewUrl(url: string): string | null {
     const id = driveFileId(url);
@@ -136,14 +140,15 @@ function PostCardCliente({
   isMobile: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [comentario, setComentario] = useState(revisao?.comentario ?? "");
-  const [salvando, setSalvando] = useState(false);
-  const [feedbackLocal, setFeedbackLocal] = useState<"aprovado" | "rejeitado" | null>(
-    revisao?.status ?? null
-  );
-
-  const previewUrl = drivePreviewUrl(post.link_arquivo);
-  const thumb = driveThumbnailUrl(post.link_arquivo);
+const [slide, setSlide] = useState(0);
+const [comentario, setComentario] = useState(revisao?.comentario ?? "");
+const [salvando, setSalvando] = useState(false);
+const [feedbackLocal, setFeedbackLocal] = useState<"aprovado" | "rejeitado" | null>(
+  revisao?.status ?? null
+);
+const links = parseLinks(post.link_arquivo || "");
+const previewUrl = drivePreviewUrl(links[slide] || "");
+const thumb = driveThumbnailUrl(links[0] || "");
 
   const handleAcao = async (status: "aprovado" | "rejeitado") => {
     setSalvando(true);
