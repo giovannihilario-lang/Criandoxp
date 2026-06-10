@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import LandingPage from "./LandingPage";
 import mayoouImg from "../public/icons/mayoou.png";
+import RevisaoCliente from "./RevisaoCliente";
 
 // ─── Supabase ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://zovgkatndrgzxocwpdjm.supabase.co";
@@ -1356,7 +1357,11 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
 }
 
 // ─── App Root ──────────────────────────────────────────────────────────────
+import RevisaoCliente from "./RevisaoCliente";
+
 export default function App() {
+  if (window.location.pathname === "/revisar") return <RevisaoCliente />;
+
   const [page, setPage] = useState<AppPage>("landing");
   const [autenticado, setAutenticado] = useState(false);
   const [senhaInput, setSenhaInput] = useState("");
