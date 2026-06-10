@@ -143,7 +143,7 @@ const COLS: ColDef[] = [
   { key: "formato",     label: "🎞 Formato",     width: 110, type: "select-simple", options: FORMATO_OPTIONS },
   { key: "tema",        label: "✨ Tema",         width: 160, type: "text",          placeholder: "Título / tema", wide: true },
   { key: "responsavel", label: "👤 Responsável", width: 120, type: "text",          placeholder: "Nome" },
-  { key: "link_arquivo", label: "🔗 Arquivo", width: 160, type: "text", placeholder: "Link do Drive" },
+  { key: "link_arquivo", label: "🔗 Arquivo", width: 60, type: "text", placeholder: "Link do Drive" },
   { key: "status",      label: "🔮 Status",      width: 130, type: "select",        options: STATUS_OPTIONS },
 ];
 
@@ -1072,7 +1072,13 @@ function TableWithDrag({ filtered, loading, rows, updateRow, duplicateRow, remov
                 </td>
                 {COLS.map(col => (
   <td key={col.key} style={{ padding: "4px 6px", borderRight: "1px solid #1e0f45", borderBottom: "1px solid #1e0f45", verticalAlign: "top" }}>
-    <EditableCell value={String(row[col.key] ?? "")} onChange={val => updateRow(row.id, col.key, val)} type={col.type} options={col.options} placeholder={col.placeholder} wide={col.wide} urgency={col.key === "data" ? urgency : undefined} />
+    {col.key === "link_arquivo" ? (
+      <div style={{ fontSize: 10, color: row.link_arquivo ? "#7c3aed" : "#3d1b69", fontFamily: "'Cinzel',serif", textAlign: "center", padding: "4px 0" }}>
+        {row.link_arquivo ? `${parseLinks(row.link_arquivo).length} arquivo(s)` : "—"}
+      </div>
+    ) : (
+      <EditableCell value={String(row[col.key] ?? "")} onChange={val => updateRow(row.id, col.key, val)} type={col.type} options={col.options} placeholder={col.placeholder} wide={col.wide} urgency={col.key === "data" ? urgency : undefined} />
+    )}
     {col.key === "link_arquivo" && row.link_arquivo && (
       <ArquivoPreview url={row.link_arquivo} />
     )}
