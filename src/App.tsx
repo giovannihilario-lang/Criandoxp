@@ -1190,8 +1190,11 @@ function RevisaoView({ isMobile }: { isMobile: boolean }) {
                   </div>
                 )}
                 <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                  <ArquivoPreview url={post.link_arquivo} />
-                </div>
+  <button onClick={() => window.open(post.link_arquivo, "_blank")}
+    style={{ background: "#1a0d3a", border: "1px solid #4a2a8a", borderRadius: 8, color: "#c9a0f5", padding: "8px 14px", fontFamily: "'Cinzel',serif", fontSize: 12, cursor: "pointer" }}>
+    📎 Ver {parseLinks(post.link_arquivo).length} arquivo(s) no Drive ↗
+  </button>
+</div>
               </div>
             </div>
           );
