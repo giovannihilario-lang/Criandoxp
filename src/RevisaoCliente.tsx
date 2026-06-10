@@ -390,11 +390,24 @@ function PostCardCliente({
                 >✕</button>
               </div>
             </div>
-            <iframe
-              src={previewUrl}
-              style={{ width: "100%", height: "70vh", border: "none" }}
-              allow="autoplay"
-            />
+            {links.length > 1 && (
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#0d0720", borderBottom: "1px solid #2d1b69" }}>
+    <button onClick={() => setSlide(s => Math.max(0, s - 1))} disabled={slide === 0}
+      style={{ background: slide === 0 ? "#1a0d3a" : "#4a2a8a", border: "none", borderRadius: 8, color: slide === 0 ? "#3d1b69" : "#fff", cursor: slide === 0 ? "default" : "pointer", padding: "8px 20px", fontFamily: "'Cinzel',serif", fontSize: 16, fontWeight: 700 }}>
+      ‹ Anterior
+    </button>
+    <span style={{ fontFamily: "'Cinzel',serif", fontSize: 12, color: "#c084fc" }}>{slide + 1} / {links.length}</span>
+    <button onClick={() => setSlide(s => Math.min(links.length - 1, s + 1))} disabled={slide === links.length - 1}
+      style={{ background: slide === links.length - 1 ? "#1a0d3a" : "#4a2a8a", border: "none", borderRadius: 8, color: slide === links.length - 1 ? "#3d1b69" : "#fff", cursor: slide === links.length - 1 ? "default" : "pointer", padding: "8px 20px", fontFamily: "'Cinzel',serif", fontSize: 16, fontWeight: 700 }}>
+      Próximo ›
+    </button>
+  </div>
+)}
+<iframe
+  src={previewUrl}
+  style={{ width: "100%", height: "60vh", border: "none", display: "block" }}
+  allow="autoplay"
+/>
           </div>
         </div>
       )}
