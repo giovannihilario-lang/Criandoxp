@@ -281,7 +281,7 @@ function Hero({ onInscrever }: { onInscrever: () => void }) {
         marginBottom: 36, background: "rgba(74,42,138,0.15)",
       }}>
         <span>🎲</span>
-        <span style={{ fontFamily: "'Cinzel', serif", fontSize: 13, color: "#c9a0f5", letterSpacing: 1 }}>A partir de R$ 20,00 a sessão</span>
+        <span style={{ fontFamily: "'Cinzel', serif", fontSize: 13, color: "#c9a0f5", letterSpacing: 1 }}>A partir de R$ 15,00 a sessão</span>
       </div>
 
       <div className="fade-up-3" style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center" }}>
@@ -386,8 +386,8 @@ function Sistemas() {
               💎 Valores & Cobranças
             </div>
             {[
-              { label: "Por sessão",     valor: "R$ 20 a R$ 25" },
-              { label: "Média mensal",   valor: "R$ 80 a R$ 125" },
+              { label: "Por sessão",     valor: "R$ 15 a R$ 25" },
+              { label: "Média mensal",   valor: "R$ 75 a R$ 125" },
               { label: "Vencimento",     valor: "Todo dia 10" },
               { label: "Taxa de entrada",valor: "4 sessões (abatida no final)" },
             ].map((v, i) => (
@@ -644,7 +644,7 @@ function Formulario({ onVoltar }: { onVoltar: () => void }) {
             </p>
 
             {[
-              { key: "ciente_valores",       txt: "Estou ciente dos valores e cobranças (R$20–25/sessão, vencimento dia 10)." },
+              { key: "ciente_valores",       txt: "Estou ciente dos valores e cobranças (R$15–25/sessão, vencimento dia 10)." },
               { key: "ciente_compromisso",   txt: "Estou ciente do compromisso de longo prazo (6 meses a 1 ano e meio, sessões semanais fixas)." },
               { key: "ciente_contrato",      txt: "Estou ciente de que assinarei um contrato ao ingressar na mesa." },
               { key: "ciente_taxa",          txt: "Estou ciente da taxa de entrada de 4 sessões (abatida no final caso permaneça)." },
