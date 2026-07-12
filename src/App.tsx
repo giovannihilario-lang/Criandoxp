@@ -768,7 +768,7 @@ function TrafegoView({ isMobile }: { isMobile: boolean }) {
 }
 
 // ─── LeadsView ─────────────────────────────────────────────────────────────
-const LEAD_STATUS_OPTIONS = ["Novo lead","Em contato","Mesa alocada","Desistiu","Lista de espera","Não respondeu"];
+const LEAD_STATUS_OPTIONS = ["Novo lead","Em contato","Mesa alocada","Desistiu","Lista de espera","Não respondeu","Número errado","Menor de 18 anos 🍼"];
 const LEAD_STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   "Novo lead":      { bg: "#3d2068", text: "#c9a0f5", border: "#6b3fa0" },
   "Em contato":     { bg: "#2a1a5e", text: "#93c5fd", border: "#3b5bdb" },
@@ -776,6 +776,8 @@ const LEAD_STATUS_COLORS: Record<string, { bg: string; text: string; border: str
   "Desistiu":       { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626" },
   "Lista de espera":{ bg: "#1e3a5f", text: "#6ee7b7", border: "#059669" },
   "Não respondeu":  { bg: "#2a2a2a", text: "#9ca3af", border: "#4b5563" },
+  "Número errado":  { bg: "#3a2a1a", text: "#fbbf24", border: "#b45309" },
+  "Menor de 18 anos 🍼": { bg: "#3a1a2e", text: "#f9a8d4", border: "#be185d" },
 };
 
 function LeadsView({ isMobile }: { isMobile: boolean }) {
