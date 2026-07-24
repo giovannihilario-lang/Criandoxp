@@ -780,12 +780,20 @@ const LEAD_STATUS_COLORS: Record<string, { bg: string; text: string; border: str
   "Menor de 18 anos 🍼": { bg: "#3a1a2e", text: "#f9a8d4", border: "#be185d" },
 };
 
+const LEAD_CHANNELS = [
+  { label: "Meta Ads", icon: "/icons/facebook.png", chaves: ["meta", "facebook"] },
+  { label: "Instagram", icon: "/icons/instagram.png", chaves: ["instagram"] },
+  { label: "TikTok", icon: "/icons/tiktok.png", chaves: ["tiktok"] },
+  { label: "Mayoou", icon: mayoouImg, chaves: ["mayoou"] },
+];
+
 function LeadsView({ isMobile }: { isMobile: boolean }) {
   const [leads, setLeads]         = useState<Lead[]>([]);
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState("");
   const [filterStatus, setFilterStatus] = useState("Todos");
   const [expanded, setExpanded]   = useState<string | null>(null);
+  const [expandedChannel, setExpandedChannel] = useState<string | null>(null);
 
   useEffect(() => {
     dbLoadLeads().then(setLeads).catch(console.error).finally(() => setLoading(false));
@@ -831,18 +839,17 @@ function LeadsView({ isMobile }: { isMobile: boolean }) {
 
 {/* Cards de origem */}
 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(3,1fr)", gap: 8 }}>
-  {[
-    { label: "Meta Ads", icon: "/icons/facebook.png", chaves: ["meta", "facebook"] },
-    { label: "Instagram", icon: "/icons/instagram.png", chaves: ["instagram"] },
-    { label: "TikTok", icon: "/icons/tiktok.png", chaves: ["tiktok"] },
-    { label: "Mayoou", icon: mayoouImg, chaves: ["mayoou"] },
-    ].map(canal => {
-    const count = leads.filter(l => {
+  {LEAD_CHANNELS.map(canal => {
+    const canalLeads = leads.filter(l => {
       const origem = (l.notas ?? "").toLowerCase();
       return canal.chaves.some(k => origem.includes(k));
-    }).length;
+    });
+    const count = canalLeads.length;
+    const isOpen = expandedChannel === canal.label;
     return (
-      <div key={canal.label} style={{ background: "#110828", border: "1px solid #2d1b69", borderRadius: 10, padding: "10px 8px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+      <div key={canal.label}
+        onClick={() => setExpandedChannel(isOpen ? null : canal.label)}
+        style={{ background: "#110828", border: `1px solid ${isOpen ? "#7c3aed" : "#2d1b69"}`, borderRadius: 10, padding: "10px 8px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}>
         <img src={canal.icon} alt={canal.label} style={{ width: 40, height: 40, objectFit: "contain" }} />
         <div style={{ fontSize: 20, fontWeight: 900, color: "#e2d0ff", fontFamily: "'Cinzel', serif" }}>{count}</div>
         <div style={{ fontSize: 8, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>{canal.label}</div>
@@ -850,6 +857,36 @@ function LeadsView({ isMobile }: { isMobile: boolean }) {
     );
   })}
 </div>
+
+{/* Breakdown por status do canal selecionado */}
+{expandedChannel && (() => {
+  const canal = LEAD_CHANNELS.find(c => c.label === expandedChannel)!;
+  const canalLeads = leads.filter(l => {
+    const origem = (l.notas ?? "").toLowerCase();
+    return canal.chaves.some(k => origem.includes(k));
+  });
+  return (
+    <div style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: "1px solid #7c3aed", borderRadius: 10, padding: "12px 14px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <img src={canal.icon} alt={canal.label} style={{ width: 20, height: 20, objectFit: "contain" }} />
+        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "#e2d0ff", letterSpacing: 0.5 }}>{canal.label} · {canalLeads.length} lead{canalLeads.length !== 1 ? "s" : ""} por status</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(4,1fr)", gap: 8 }}>
+        {LEAD_STATUS_OPTIONS.map(s => {
+          const c = LEAD_STATUS_COLORS[s];
+          const n = canalLeads.filter(l => l.status === s).length;
+          return (
+            <div key={s} onClick={() => setFilterStatus(filterStatus === s ? "Todos" : s)}
+              style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 8, padding: "8px 6px", textAlign: "center", cursor: "pointer", opacity: n === 0 ? 0.4 : 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 900, color: c.text, fontFamily: "'Cinzel', serif" }}>{n}</div>
+              <div style={{ fontSize: 7, color: c.text, opacity: 0.85, fontFamily: "'Cinzel', serif", letterSpacing: 0.4 }}>{s}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+})()}
 
 </div>
 
