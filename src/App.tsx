@@ -1528,7 +1528,7 @@ export default function App() {
   const [page, setPage] = useState<AppPage>("landing");
   const [autenticado, setAutenticado] = useState(false);
   const [checandoSessao, setCheckandoSessao] = useState(true);
-const EMAIL_LOGIN = "seu-email@aqui.com"; // troca pelo email que você cadastrou no Supabase Auth
+const EMAIL_LOGIN = "giovannihilario@hotmail.com"; // troca pelo email que você cadastrou no Supabase Auth
   const [senhaInput, setSenhaInput] = useState("");
   const [erroSenha, setErroSenha] = useState("");
   const [entrando, setEntrando] = useState(false);
