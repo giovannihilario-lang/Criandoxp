@@ -1528,7 +1528,7 @@ export default function App() {
   const [page, setPage] = useState<AppPage>("landing");
   const [autenticado, setAutenticado] = useState(false);
   const [checandoSessao, setCheckandoSessao] = useState(true);
-  const [email, setEmail] = useState("");
+const EMAIL_LOGIN = "seu-email@aqui.com"; // troca pelo email que você cadastrou no Supabase Auth
   const [senhaInput, setSenhaInput] = useState("");
   const [erroSenha, setErroSenha] = useState("");
   const [entrando, setEntrando] = useState(false);
@@ -1547,8 +1547,7 @@ export default function App() {
   const tentarEntrar = async () => {
     setEntrando(true);
     setErroSenha("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senhaInput });
-    setEntrando(false);
+const { error } = await supabase.auth.signInWithPassword({ email: EMAIL_LOGIN, password: senhaInput });    setEntrando(false);
     if (error) setErroSenha("Email ou senha incorretos.");
   };
 
@@ -1563,13 +1562,6 @@ export default function App() {
         <div style={{ fontSize: 48, marginBottom: 16 }}>🔐</div>
         <div style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 900, color: "#c084fc", marginBottom: 8 }}>Área Restrita</div>
         <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 13, color: "#5a3a8a", marginBottom: 24 }}>Criando XP · Dashboard Interno</div>
-        <input
-          type="email"
-          value={email}
-          onChange={e => { setEmail(e.target.value); setErroSenha(""); }}
-          placeholder="Email"
-          style={{ width: "100%", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, color: "#e2d0ff", fontFamily: "'Lato', sans-serif", fontSize: 15, padding: "12px 16px", outline: "none", marginBottom: 8, boxSizing: "border-box" as const }}
-        />
         <input
           type="password"
           value={senhaInput}
