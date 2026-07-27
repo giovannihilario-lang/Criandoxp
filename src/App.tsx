@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createClient } from "@supabase/supabase-js";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import LandingPage from "./LandingPage";
 import mayoouImg from "../public/icons/mayoou.png";
@@ -14,6 +15,7 @@ const HEADERS = {
 };
 const TABLE = `${SUPABASE_URL}/rest/v1/postagens`;
 
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ─── Constantes ────────────────────────────────────────────────────────────
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const WEEKDAYS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
@@ -185,19 +187,17 @@ async function dbDelete(id: string): Promise<void> {
 }
 
 async function dbLoadLeads(): Promise<Lead[]> {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/clientes?select=*&order=created_at.desc`, {
-    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  const { data, error } = await supabase
+    .from("clientes")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data as Lead[];
 }
 
 async function dbUpdateLeadStatus(id: string, status: string): Promise<void> {
-  await fetch(`${SUPABASE_URL}/rest/v1/clientes?id=eq.${id}`, {
-    method: "PATCH",
-    headers: { ...HEADERS, "Prefer": "return=minimal" },
-    body: JSON.stringify({ status }),
-  });
+  const { error } = await supabase.from("clientes").update({ status }).eq("id", id);
+  if (error) console.error(error.message);
 }
 
 // ─── Hook responsivo ───────────────────────────────────────────────────────
@@ -1527,18 +1527,34 @@ export default function App() {
 
   const [page, setPage] = useState<AppPage>("landing");
   const [autenticado, setAutenticado] = useState(false);
+  const [checandoSessao, setCheckandoSessao] = useState(true);
+  const [email, setEmail] = useState("");
   const [senhaInput, setSenhaInput] = useState("");
-  const [erroSenha, setErroSenha] = useState(false);
+  const [erroSenha, setErroSenha] = useState("");
+  const [entrando, setEntrando] = useState(false);
 
-  const SENHA = atob("Y3JpdGljYWw3");
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setAutenticado(!!session);
+      setCheckandoSessao(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAutenticado(!!session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
-  const tentarEntrar = () => {
-    if (senhaInput === SENHA) {
-      setAutenticado(true);
-      setErroSenha(false);
-    } else {
-      setErroSenha(true);
-    }
+  const tentarEntrar = async () => {
+    setEntrando(true);
+    setErroSenha("");
+    const { error } = await supabase.auth.signInWithPassword({ email, password: senhaInput });
+    setEntrando(false);
+    if (error) setErroSenha("Email ou senha incorretos.");
+  };
+
+  const sair = async () => {
+    await supabase.auth.signOut();
+    setPage("landing");
   };
 
   const telaSenha = (
@@ -1548,20 +1564,29 @@ export default function App() {
         <div style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 900, color: "#c084fc", marginBottom: 8 }}>Área Restrita</div>
         <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 13, color: "#5a3a8a", marginBottom: 24 }}>Criando XP · Dashboard Interno</div>
         <input
+          type="email"
+          value={email}
+          onChange={e => { setEmail(e.target.value); setErroSenha(""); }}
+          placeholder="Email"
+          style={{ width: "100%", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, color: "#e2d0ff", fontFamily: "'Lato', sans-serif", fontSize: 15, padding: "12px 16px", outline: "none", marginBottom: 8, boxSizing: "border-box" as const }}
+        />
+        <input
           type="password"
           value={senhaInput}
-          onChange={e => { setSenhaInput(e.target.value); setErroSenha(false); }}
+          onChange={e => { setSenhaInput(e.target.value); setErroSenha(""); }}
           onKeyDown={e => e.key === "Enter" && tentarEntrar()}
           placeholder="Senha"
           style={{ width: "100%", background: "#0d0720", border: `1px solid ${erroSenha ? "#ef4444" : "#4a2a8a"}`, borderRadius: 10, color: "#e2d0ff", fontFamily: "'Lato', sans-serif", fontSize: 15, padding: "12px 16px", outline: "none", marginBottom: 8, boxSizing: "border-box" as const }}
         />
-        {erroSenha && <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 12, color: "#fca5a5", marginBottom: 12 }}>Senha incorreta.</div>}
-        <button onClick={tentarEntrar} style={{ width: "100%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
-          Entrar
+        {erroSenha && <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 12, color: "#fca5a5", marginBottom: 12 }}>{erroSenha}</div>}
+        <button onClick={tentarEntrar} disabled={entrando} style={{ width: "100%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 700, cursor: entrando ? "default" : "pointer", marginTop: 8, opacity: entrando ? 0.6 : 1 }}>
+          {entrando ? "Entrando..." : "Entrar"}
         </button>
       </div>
     </div>
   );
+
+  if (checandoSessao) return null;
 
   return (
     <>
@@ -1569,7 +1594,7 @@ export default function App() {
       {page === "landing"
         ? <LandingPage onAbrirDashboard={() => setPage("dashboard")} />
         : autenticado
-          ? <Dashboard onVoltar={() => { setPage("landing"); setAutenticado(false); setSenhaInput(""); }} />
+          ? <Dashboard onVoltar={sair} />
           : telaSenha
       }
     </>
