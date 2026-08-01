@@ -515,8 +515,7 @@ function Formulario({ onVoltar }: { onVoltar: () => void }) {
             Aventura Iniciada!
           </h2>
           <p style={{ fontFamily: "'Lato', sans-serif", fontSize: 16, color: "#9d8bbf", lineHeight: 1.7, marginBottom: 32, maxWidth: 400 }}>
-            Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsApp ou Discord para te apresentar as mesas disponíveis. 🧙
-          </p>
+Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsApp para te apresentar as mesas disponíveis. 🧙          </p>
           <button className="btn-primary" onClick={onVoltar} style={{ padding: "14px 32px", fontSize: 14 }}>
             ← Voltar ao início
           </button>
@@ -554,9 +553,9 @@ function Formulario({ onVoltar }: { onVoltar: () => void }) {
                 onChange={e => setForm(p => ({ ...p, idade: e.target.value }))} />
             </div>
             <div>
-              <label style={labelStyle}>WhatsApp e @ do Discord {reqMark}</label>
-              <input className="form-input" value={form.whatsapp_discord} placeholder="(11) 99999-9999 / usuario#0000"
-                onChange={e => setForm(p => ({ ...p, whatsapp_discord: e.target.value }))} />
+              <label style={labelStyle}>WhatsApp {reqMark}</label>
+<input className="form-input" value={form.whatsapp_discord} placeholder="(11) 99999-9999"
+  onChange={e => setForm(p => ({ ...p, whatsapp_discord: e.target.value }))} />
             </div>
             <div>
               <label style={labelStyle}>Há quanto tempo você joga RPG de mesa? {reqMark}</label>
