@@ -37,6 +37,29 @@ function getOrigem(): string {
   return ref2 ? `Outro: ${ref2}` : "Direto";
 }
 
+// ─── Cliques de influencer ─────────────────────────────────────────────────
+function getInfluencerCodigo(): string {
+  const params = new URLSearchParams(window.location.search);
+  const codigo = (params.get("ref") || params.get("utm_source") || "").toLowerCase().trim();
+  return codigo;
+}
+
+async function registrarCliqueInfluencer(codigo: string): Promise<void> {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/rpc/increment_influencer_click`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+      },
+      body: JSON.stringify({ p_codigo: codigo }),
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 // ─── Dados do formulário ───────────────────────────────────────────────────
 const SISTEMAS = ["D&D", "Pathfinder", "Tormenta20", "Vampire", "Ordem Paranormal", "Call of Cthulhu", "Outro"];
 const DIAS     = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
@@ -730,6 +753,16 @@ function Footer() {
 // ─── LandingPage principal ─────────────────────────────────────────────────
 export default function LandingPage({ onAbrirDashboard }: { onAbrirDashboard: () => void }) {
   const [paginaAtual, setPaginaAtual] = useState<"landing" | "form">("landing");
+
+  // ── Registra o clique do link de influencer (uma vez por sessão) ──
+  useEffect(() => {
+    const codigo = getInfluencerCodigo();
+    if (!codigo) return;
+    const jaContado = sessionStorage.getItem("xp_click_" + codigo);
+    if (jaContado) return;
+    sessionStorage.setItem("xp_click_" + codigo, "1");
+    registrarCliqueInfluencer(codigo);
+  }, []);
 
   // ── Segredo: 7 cliques no logo abre o dashboard ──
   const clickCount = useRef(0);

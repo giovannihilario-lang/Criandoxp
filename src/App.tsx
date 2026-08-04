@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import LandingPage from "./LandingPage";
 import mayoouImg from "../public/icons/mayoou.png";
+import zonad20Img from "../public/icons/zonad20.png";
 import RevisaoCliente from "./RevisaoCliente";
 
 // ─── Supabase ──────────────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ const FORMATO_OPTIONS = ["Post","Reels","Story","Carrossel","Live","Shorts","Thr
 const REDE_OPTIONS = ["Instagram","TikTok","YouTube","Twitter/X","Facebook","Todos"];
 type Status = typeof STATUS_OPTIONS[number];
 type ViewMode = "tabela" | "calendario";
-type AppTab = "calendario" | "trafego" | "leads" | "revisao";
+type AppTab = "calendario" | "trafego" | "leads" | "influencers" | "revisao";
 type AppPage = "landing" | "dashboard";
 
 const REDE_ICONS: Record<string, string> = {
@@ -198,6 +199,45 @@ async function dbLoadLeads(): Promise<Lead[]> {
 async function dbUpdateLeadStatus(id: string, status: string): Promise<void> {
   const { error } = await supabase.from("clientes").update({ status }).eq("id", id);
   if (error) console.error(error.message);
+}
+
+// ─── Influencers ────────────────────────────────────────────────────────────
+interface Influencer {
+  id: string;
+  created_at: string;
+  nome: string;
+  codigo: string;
+  ativo: boolean;
+  clicks: number;
+}
+
+function slugifyCodigo(s: string): string {
+  return s
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+async function dbLoadInfluencers(): Promise<Influencer[]> {
+  const { data, error } = await supabase.from("influencers").select("*").order("clicks", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data as Influencer[];
+}
+
+async function dbCreateInfluencer(nome: string, codigo: string): Promise<void> {
+  const { error } = await supabase.from("influencers").insert({ nome, codigo });
+  if (error) throw new Error(error.message);
+}
+
+async function dbUpdateInfluencer(id: string, patch: Partial<Influencer>): Promise<void> {
+  const { error } = await supabase.from("influencers").update(patch).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+async function dbDeleteInfluencer(id: string): Promise<void> {
+  const { error } = await supabase.from("influencers").delete().eq("id", id);
+  if (error) throw new Error(error.message);
 }
 
 // ─── Hook responsivo ───────────────────────────────────────────────────────
@@ -785,6 +825,7 @@ const LEAD_CHANNELS = [
   { label: "Instagram", icon: "/icons/instagram.png", chaves: ["instagram"] },
   { label: "TikTok", icon: "/icons/tiktok.png", chaves: ["tiktok"] },
   { label: "Mayoou", icon: mayoouImg, chaves: ["mayoou"] },
+  { label: "Zonad20", icon: zonad20Img, chaves: ["zonad20", "zonad"] },
 ];
 
 function LeadsView({ isMobile }: { isMobile: boolean }) {
@@ -976,6 +1017,153 @@ function LeadsView({ isMobile }: { isMobile: boolean }) {
     </div>
   );
 }
+// ─── InfluencersView ────────────────────────────────────────────────────────
+function InfluencersView({ isMobile }: { isMobile: boolean }) {
+  const [influencers, setInfluencers] = useState<Influencer[]>([]);
+  const [leads, setLeads]             = useState<Lead[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [nome, setNome]               = useState("");
+  const [codigo, setCodigo]           = useState("");
+  const [codigoEditado, setCodigoEditado] = useState(false);
+  const [salvando, setSalvando]       = useState(false);
+  const [erro, setErro]               = useState("");
+  const [copiado, setCopiado]         = useState<string | null>(null);
+
+  const carregar = () => {
+    setLoading(true);
+    Promise.all([dbLoadInfluencers(), dbLoadLeads()])
+      .then(([infs, lds]) => { setInfluencers(infs); setLeads(lds); })
+      .catch(e => setErro(e.message))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { carregar(); }, []);
+
+  const leadsDoInfluencer = (codigo: string) => leads.filter(l => (l.notas ?? "").toLowerCase().includes(codigo.toLowerCase()));
+
+  const criar = async () => {
+    const codigoFinal = slugifyCodigo(codigo || nome);
+    if (!nome.trim() || !codigoFinal) { setErro("Preencha o nome do influencer."); return; }
+    if (influencers.some(i => i.codigo === codigoFinal)) { setErro("Já existe um influencer com esse código."); return; }
+    setSalvando(true);
+    setErro("");
+    try {
+      await dbCreateInfluencer(nome.trim(), codigoFinal);
+      setNome(""); setCodigo(""); setCodigoEditado(false);
+      carregar();
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const alternarAtivo = async (inf: Influencer) => {
+    setInfluencers(prev => prev.map(i => i.id === inf.id ? { ...i, ativo: !i.ativo } : i));
+    await dbUpdateInfluencer(inf.id, { ativo: !inf.ativo }).catch(console.error);
+  };
+
+  const excluir = async (inf: Influencer) => {
+    if (!window.confirm(`Excluir o influencer "${inf.nome}"? Isso não apaga os leads já gerados, só o cadastro do link.`)) return;
+    setInfluencers(prev => prev.filter(i => i.id !== inf.id));
+    await dbDeleteInfluencer(inf.id).catch(console.error);
+  };
+
+  const copiarLink = (codigo: string) => {
+    const link = `${window.location.origin}/?ref=${codigo}`;
+    navigator.clipboard.writeText(link);
+    setCopiado(codigo);
+    setTimeout(() => setCopiado(null), 1500);
+  };
+
+  const inputStyle: React.CSSProperties = { background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 8, padding: "8px 10px", fontFamily: "'Lato', sans-serif", fontSize: 13, outline: "none" };
+
+  const ranking = [...influencers].sort((a, b) => {
+    const leadsA = leadsDoInfluencer(a.codigo).length;
+    const leadsB = leadsDoInfluencer(b.codigo).length;
+    if (leadsB !== leadsA) return leadsB - leadsA;
+    return b.clicks - a.clicks;
+  });
+
+  return (
+    <div>
+      {/* Form de criação */}
+      <div style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: "1px solid #4a2a8a", borderRadius: 12, padding: 16, marginBottom: 20 }}>
+        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c084fc", letterSpacing: 1, marginBottom: 12 }}>➕ NOVO INFLUENCER</div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ flex: isMobile ? "1 1 100%" : "1 1 200px" }}>
+            <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 4 }}>NOME</div>
+            <input value={nome} onChange={e => { setNome(e.target.value); if (!codigoEditado) setCodigo(slugifyCodigo(e.target.value)); }}
+              placeholder="Ex: Zonad20" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ flex: isMobile ? "1 1 100%" : "0 0 160px" }}>
+            <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 4 }}>CÓDIGO DO LINK</div>
+            <input value={codigo} onChange={e => { setCodigo(slugifyCodigo(e.target.value)); setCodigoEditado(true); }}
+              placeholder="zonad20" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+          </div>
+          <button onClick={criar} disabled={salvando}
+            style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700, cursor: salvando ? "default" : "pointer", opacity: salvando ? 0.6 : 1 }}>
+            {salvando ? "Criando..." : "Criar link"}
+          </button>
+        </div>
+        {erro && <div style={{ color: "#fca5a5", fontSize: 11, marginTop: 8, fontFamily: "'Lato', sans-serif" }}>{erro}</div>}
+      </div>
+
+      {loading && <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
+
+      {!loading && ranking.length === 0 && (
+        <div style={{ textAlign: "center", padding: 40, color: "#5a3a8a", fontFamily: "'Cinzel', serif", fontSize: 13 }}>Nenhum influencer cadastrado ainda.</div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {ranking.map((inf, idx) => {
+          const leadsInf = leadsDoInfluencer(inf.codigo);
+          const conversao = inf.clicks > 0 ? (leadsInf.length / inf.clicks * 100) : 0;
+          const link = `${window.location.origin}/?ref=${inf.codigo}`;
+          return (
+            <div key={inf.id} style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: `1px solid ${inf.ativo ? "#4a2a8a" : "#3a1a1a"}`, borderLeft: `4px solid ${inf.ativo ? "#7c3aed" : "#5a3a3a"}`, borderRadius: 12, padding: 16, opacity: inf.ativo ? 1 : 0.6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "'Cinzel', serif", fontSize: 16, fontWeight: 900, color: idx === 0 ? "#fbbf24" : "#5a3a8a" }}>
+                  {idx === 0 && leadsInf.length > 0 ? "🏆" : `#${idx + 1}`}
+                </span>
+                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 15, fontWeight: 700, color: "#e2d0ff", flex: 1, minWidth: 120 }}>{inf.nome}</div>
+                <button onClick={() => alternarAtivo(inf)} style={{ background: "none", border: `1px solid ${inf.ativo ? "#16a34a" : "#5a3a3a"}`, color: inf.ativo ? "#86efac" : "#9ca3af", borderRadius: 6, padding: "4px 10px", fontSize: 10, fontFamily: "'Cinzel', serif", cursor: "pointer" }}>
+                  {inf.ativo ? "Ativo" : "Pausado"}
+                </button>
+                <button onClick={() => excluir(inf)} style={{ background: "none", border: "1px solid #4a2a8a", color: "#5a3a8a", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>🗑</button>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                <input readOnly value={link} onClick={e => (e.target as HTMLInputElement).select()}
+                  style={{ ...inputStyle, flex: 1, fontSize: 12, minWidth: 0 }} />
+                <button onClick={() => copiarLink(inf.codigo)}
+                  style={{ background: copiado === inf.codigo ? "#16a34a" : "#1a0d3a", color: copiado === inf.codigo ? "#fff" : "#c084fc", border: "1px solid #4a2a8a", borderRadius: 8, padding: "8px 12px", fontSize: 11, fontFamily: "'Cinzel', serif", cursor: "pointer", whiteSpace: "nowrap" }}>
+                  {copiado === inf.codigo ? "Copiado!" : "📋 Copiar"}
+                </button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(3,1fr)", gap: 8 }}>
+                <div style={{ background: "#0d0720", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: "#93c5fd", fontFamily: "'Cinzel', serif" }}>{inf.clicks}</div>
+                  <div style={{ fontSize: 8, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>CLIQUES</div>
+                </div>
+                <div style={{ background: "#0d0720", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: "#c084fc", fontFamily: "'Cinzel', serif" }}>{leadsInf.length}</div>
+                  <div style={{ fontSize: 8, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>LEADS</div>
+                </div>
+                <div style={{ background: "#0d0720", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: "#86efac", fontFamily: "'Cinzel', serif" }}>{conversao.toFixed(1)}%</div>
+                  <div style={{ fontSize: 8, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>CONVERSÃO</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function PostagemCard({ row, idx, onUpdate, onDuplicate, onRemove }: {
   row: Row; idx: number;
   onUpdate: (id: string, key: keyof Row, val: string) => void;
@@ -1395,7 +1583,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'Cinzel', serif", fontSize: isMobile ? 18 : 24, fontWeight: 900, background: "linear-gradient(90deg,#c084fc,#818cf8,#a855f7)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>Criando XP</div>
           <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#7c3aed", letterSpacing: 3, textTransform: "uppercase" }}>
-          {appTab === "calendario" ? "Calendário de Postagem" : appTab === "trafego" ? "Tráfego Pago · Meta Ads" : appTab === "leads" ? "Leads & Clientes" : "Revisão de Conteúdo"}          </div>
+          {appTab === "calendario" ? "Calendário de Postagem" : appTab === "trafego" ? "Tráfego Pago · Meta Ads" : appTab === "leads" ? "Leads & Clientes" : appTab === "influencers" ? "Influencers & Links" : "Revisão de Conteúdo"}          </div>
         </div>
         <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-end" : "center", gap: 8, width: isMobile ? "100%" : "auto" }}>
           {appTab === "calendario" && urgentCount > 0 && (
@@ -1404,7 +1592,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
           {appTab === "calendario" && <span style={{ fontSize: 10, color: syncColor, animation: syncStatus === "saving" ? "blink 1s infinite" : "none" }}>{syncLabel}</span>}
           <button onClick={onVoltar} style={{ background: "transparent", border: "1px solid #4a2a8a", color: "#7c3aed", borderRadius: 8, padding: "6px 14px", fontFamily: "'Cinzel', serif", fontSize: 11, cursor: "pointer", letterSpacing: 1 }}>← Voltar</button>
           <div style={{ display: "flex", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, overflow: "hidden", width: isMobile ? "100%" : "auto" }}>
-          {([["calendario","📅"], ["trafego","📊"], ["leads","👥"], ["revisao","📋"]] as [AppTab,string][]).map(([tab, icon]) => (
+          {([["calendario","📅"], ["trafego","📊"], ["leads","👥"], ["influencers","🔗"], ["revisao","📋"]] as [AppTab,string][]).map(([tab, icon]) => (
               <button key={tab} onClick={() => setAppTab(tab)}
                 style={{ flex: isMobile ? 1 : undefined, background: appTab === tab ? "linear-gradient(135deg,#4a2a8a,#7c3aed)" : "transparent", color: appTab === tab ? "#fff" : "#5a3a8a", border: "none", padding: isMobile ? "10px 0" : "8px 14px", fontFamily: "'Cinzel', serif", fontSize: isMobile ? 12 : 11, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>
                 {icon}
@@ -1511,6 +1699,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
 
       {appTab === "trafego" && <TrafegoView isMobile={isMobile} />}
       {appTab === "leads"   && <LeadsView   isMobile={isMobile} />}
+      {appTab === "influencers" && <InfluencersView isMobile={isMobile} />}
       {appTab === "revisao"  && <RevisaoView  isMobile={isMobile} />}
 
       <div style={{ marginTop: 36, textAlign: "center", color: "#3d1b69", fontSize: 10, fontFamily: "'Cinzel', serif", letterSpacing: 2 }}>
