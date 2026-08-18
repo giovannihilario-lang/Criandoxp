@@ -5,6 +5,25 @@ const SUPABASE_URL = "https://zovgkatndrgzxocwpdjm.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvdmdrYXRuZHJnenhvY3dwZGptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MzY4MjEsImV4cCI6MjA5NTMxMjgyMX0.jm_BaUCN3CHPP9Rut2HM8KRVWes5nZLhJ_oyKbdqDXs";
 const CLIENTES_TABLE = `${SUPABASE_URL}/rest/v1/clientes`;
 
+// ─── Meta Pixel ───────────────────────────────────────────────────────────
+type MetaPixelFunction = (...args: unknown[]) => void;
+
+function trackMetaLead(): void {
+  try {
+    const fbq = (window as Window & { fbq?: MetaPixelFunction }).fbq;
+    if (typeof fbq !== "function") return;
+
+    // Não envia nome, telefone ou qualquer dado pessoal para a Meta.
+    fbq("track", "Lead", {
+      content_name: "Inscrição Mesas RPG",
+      content_category: "Mesas de RPG",
+    });
+  } catch (error) {
+    // Falha de rastreamento nunca deve impedir a inscrição do usuário.
+    console.warn("Meta Pixel: não foi possível registrar o Lead.", error);
+  }
+}
+
 async function salvarCliente(data: Record<string, string>): Promise<void> {
   const res = await fetch(CLIENTES_TABLE, {
     method: "POST",
@@ -515,6 +534,7 @@ function Formulario({ onVoltar }: { onVoltar: () => void }) {
         status:               "Novo lead",
         notas:                `Origem: ${origem}`,
       });
+      trackMetaLead();
       setEnviado(true);
     } catch (e: any) {
       setErro("Erro ao enviar. Tente novamente ou entre em contato pelo Instagram.");
