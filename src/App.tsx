@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import LandingPage from "./LandingPage";
 import mayoouImg from "../public/icons/mayoou.png";
 import zonad20Img from "../public/icons/zonad20.png";
-import RevisaoCliente from "./RevisaoCliente";
 
 // ─── Supabase ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://zovgkatndrgzxocwpdjm.supabase.co";
@@ -26,7 +24,7 @@ const FORMATO_OPTIONS = ["Post","Reels","Story","Carrossel","Live","Shorts","Thr
 const REDE_OPTIONS = ["Instagram","TikTok","YouTube","Twitter/X","Facebook","Todos"];
 type Status = typeof STATUS_OPTIONS[number];
 type ViewMode = "tabela" | "calendario";
-type AppTab = "calendario" | "trafego" | "leads" | "influencers" | "revisao";
+type AppTab = "calendario" | "leads" | "influencers";
 type AppPage = "landing" | "dashboard";
 
 const REDE_ICONS: Record<string, string> = {
@@ -599,225 +597,6 @@ function DayPanel({ day, mes, rows, onClose, isMobile }: { day: number; mes: num
   );
 }
 
-// ─── Tráfego ───────────────────────────────────────────────────────────────
-
-function TrafegoView({ isMobile }: { isMobile: boolean }) {
-  const [campaigns, setCampaigns] = useState<any[]>([]);
-  const [audience, setAudience] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const META_TOKEN = import.meta.env.VITE_META_TOKEN;
-  const AD_ACCOUNT = import.meta.env.VITE_META_AD_ACCOUNT_ID;
-
-  const getDateRange = () => {
-    const now = new Date();
-    const since = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const until = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
-    return { since, until };
-  };
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const { since, until } = getDateRange();
-        const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
-
-        // Buscar campanhas com métricas
-        const campsRes = await fetch(
-          `https://graph.facebook.com/v25.0/${AD_ACCOUNT}/campaigns?fields=name,status,start_time,stop_time,insights.time_range({"since":"${since}","until":"${until}"}){impressions,reach,clicks,ctr,frequency}&access_token=${META_TOKEN}`
-        );
-        const campsData = await campsRes.json();
-
-        if (campsData.error) throw new Error(campsData.error.message);
-
-        const parsed = (campsData.data ?? []).map((c: any) => ({
-          id: c.id,
-          nome: c.name,
-          status: c.status,
-          inicio: c.start_time ? new Date(c.start_time).toLocaleDateString("pt-BR") : "—",
-          fim: c.stop_time ? new Date(c.stop_time).toLocaleDateString("pt-BR") : "—",
-          impressions: Number(c.insights?.data?.[0]?.impressions ?? 0),
-          reach: Number(c.insights?.data?.[0]?.reach ?? 0),
-          clicks: Number(c.insights?.data?.[0]?.clicks ?? 0),
-          ctr: Number(c.insights?.data?.[0]?.ctr ?? 0).toFixed(2),
-          frequency: Number(c.insights?.data?.[0]?.frequency ?? 0).toFixed(2),
-        }));
-
-        setCampaigns(parsed);
-
-        // Buscar público por idade e gênero
-        const audRes = await fetch(
-          `https://graph.facebook.com/v25.0/${AD_ACCOUNT}/insights?fields=reach,impressions&breakdowns=age,gender&time_range=${timeRange}&level=account&access_token=${META_TOKEN}`
-        );
-        const audData = await audRes.json();
-
-        if (!audData.error && audData.data) {
-          const grouped: Record<string, { homens: number; mulheres: number }> = {};
-          audData.data.forEach((d: any) => {
-            if (!grouped[d.age]) grouped[d.age] = { homens: 0, mulheres: 0 };
-            if (d.gender === "male") grouped[d.age].homens += Number(d.reach);
-            if (d.gender === "female") grouped[d.age].mulheres += Number(d.reach);
-          });
-          const total = Object.values(grouped).reduce((s, v) => s + v.homens + v.mulheres, 0);
-          const audienceParsed = Object.entries(grouped).map(([faixa, v]) => ({
-            faixa,
-            homens: Math.round((v.homens / total) * 100),
-            mulheres: Math.round((v.mulheres / total) * 100),
-            total: Math.round(((v.homens + v.mulheres) / total) * 100),
-          }));
-          setAudience(audienceParsed);
-        }
-
-      } catch (e: any) {
-        setError(e.message ?? "Erro ao buscar dados do Meta.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  const totalViz    = campaigns.reduce((s, c) => s + c.impressions, 0);
-  const totalUnicos = campaigns.reduce((s, c) => s + c.reach, 0);
-  const totalClicks = campaigns.reduce((s, c) => s + c.clicks, 0);
-  const avgCtr      = campaigns.length ? (campaigns.reduce((s, c) => s + Number(c.ctr), 0) / campaigns.length).toFixed(2) : "0";
-
-  const chartData = campaigns.map(c => ({
-    name: c.nome.slice(0, 14) + "…",
-    Visualizações: c.impressions,
-    Alcance: c.reach,
-  }));
-
-  const STATUS_CAMP: Record<string, { color: string; label: string }> = {
-    ACTIVE:   { color: "#86efac", label: "Ativa" },
-    PAUSED:   { color: "#fcd34d", label: "Pausada" },
-    ARCHIVED: { color: "#fca5a5", label: "Encerrada" },
-    DELETED:  { color: "#fca5a5", label: "Deletada" },
-  };
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null;
-    return (
-      <div style={{ background: "#1a0d3a", border: "1px solid #4a2a8a", borderRadius: 8, padding: "10px 14px" }}>
-        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#7c3aed", marginBottom: 6 }}>{label}</div>
-        {payload.map((p: any) => <div key={p.name} style={{ fontSize: 11, color: p.color, fontFamily: "'Lato', sans-serif" }}>{p.name}: <b>{p.value.toLocaleString("pt-BR")}</b></div>)}
-      </div>
-    );
-  };
-
-  if (loading) return (
-    <div style={{ display: "flex", justifyContent: "center", padding: 60 }}>
-      <div style={{ width: 36, height: 36, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-    </div>
-  );
-
-  if (error) return (
-    <div style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 12, padding: "20px 24px", textAlign: "center" }}>
-      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, color: "#fca5a5", marginBottom: 8 }}>⚠ Erro ao carregar dados</div>
-      <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 12, color: "#fca5a5" }}>{error}</div>
-    </div>
-  );
-
-  const now = new Date();
-  const mesAtual = now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-
-  return (
-    <div>
-      <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, letterSpacing: 3, color: "#5a3a8a", marginBottom: 16 }}>
-        ✦ {mesAtual.toUpperCase()} · {campaigns.length} CAMPANHA{campaigns.length !== 1 ? "S" : ""}
-      </div>
-
-      {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
-        {[
-          { label: "Visualizações", val: totalViz.toLocaleString("pt-BR"),    color: "#c084fc" },
-          { label: "Alcance",       val: totalUnicos.toLocaleString("pt-BR"), color: "#a78bfa" },
-          { label: "Cliques",       val: totalClicks.toLocaleString("pt-BR"), color: "#e879f9" },
-          { label: "CTR Médio",     val: `${avgCtr}%`,                        color: "#6ee7b7" },
-        ].map(k => (
-          <div key={k.label} style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: "1px solid #4a2a8a", borderTop: `2px solid ${k.color}`, borderRadius: 12, padding: isMobile ? "14px 12px" : "18px 20px" }}>
-            <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#a78bfa", marginBottom: 6, letterSpacing: 1 }}>{k.label}</div>
-            <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 900, color: k.color, fontFamily: "'Cinzel', serif" }}>{k.val}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Gráfico + Público */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 300px", gap: 16, marginBottom: 24 }}>
-        <div style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: "1px solid #4a2a8a", borderRadius: 14, padding: "20px 16px" }}>
-          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c084fc", marginBottom: 16 }}>✦ Visualizações por Campanha</div>
-          <div style={{ height: isMobile ? 180 : 220 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 50, left: 0 }}>
-                <XAxis dataKey="name" tick={{ fill: "#5a3a8a", fontSize: 8 }} angle={-35} textAnchor="end" interval={0} />
-                <YAxis tick={{ fill: "#5a3a8a", fontSize: 9 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+"k" : v} width={32} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="Visualizações" radius={[4,4,0,0]}>
-                  {chartData.map((_, i) => <Cell key={i} fill={`rgba(162,89,255,${0.85-i*0.08})`} />)}
-                </Bar>
-                <Bar dataKey="Alcance" radius={[4,4,0,0]}>
-                  {chartData.map((_, i) => <Cell key={i} fill={`rgba(192,132,252,${0.5-i*0.04})`} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: "1px solid #4a2a8a", borderRadius: 14, padding: "20px 16px" }}>
-          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c084fc", marginBottom: 16 }}>✦ Público — mês atual</div>
-          {audience.length === 0
-            ? <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 12, color: "#5a3a8a", textAlign: "center", paddingTop: 20 }}>Sem dados de público disponíveis.</div>
-            : audience.map(a => (
-              <div key={a.faixa} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a", width: 38 }}>{a.faixa}</div>
-                <div style={{ flex: 1, height: 18, background: "#0d0720", borderRadius: 4, overflow: "hidden", display: "flex" }}>
-                  <div style={{ width: `${a.homens}%`, background: "rgba(162,89,255,0.8)", height: "100%" }} />
-                  <div style={{ width: `${a.mulheres}%`, background: "rgba(240,171,252,0.65)", height: "100%" }} />
-                </div>
-                <div style={{ fontSize: 10, color: "#5a3a8a", width: 28, textAlign: "right" }}>{a.total}%</div>
-              </div>
-            ))
-          }
-        </div>
-      </div>
-
-      {/* Cards de campanhas */}
-      {campaigns.length === 0
-        ? <div style={{ textAlign: "center", padding: 40, color: "#5a3a8a", fontFamily: "'Cinzel', serif", fontSize: 13 }}>Nenhuma campanha encontrada para o mês atual.</div>
-        : <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit,minmax(280px,1fr))", gap: 14 }}>
-            {campaigns.map((c, idx) => {
-              const st = STATUS_CAMP[c.status] ?? { color: "#c9a0f5", label: c.status };
-              return (
-                <div key={c.id} style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: "1px solid #2d1b69", borderRadius: 12, padding: "16px 18px", position: "relative" }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#5a3a8a", marginBottom: 4 }}>Campanha {String(idx+1).padStart(2,"0")}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#e2d0ff", marginBottom: 4, fontFamily: "'Cinzel', serif" }}>{c.nome}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                    <span style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: st.color, border: `1px solid ${st.color}`, borderRadius: 20, padding: "2px 8px" }}>{st.label}</span>
-                    <span style={{ fontFamily: "'Lato', sans-serif", fontSize: 10, color: "#5a3a8a" }}>{c.inicio} → {c.fim}</span>
-                  </div>
-                  <div style={{ borderTop: "1px solid #2d1b69", paddingTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                    <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 3 }}>VISUALIZAÇÕES</div><div style={{ fontSize: 18, fontWeight: 700, color: "#e2d0ff" }}>{c.impressions.toLocaleString("pt-BR")}</div></div>
-                    <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 3 }}>ALCANCE</div><div style={{ fontSize: 18, fontWeight: 700, color: "#e2d0ff" }}>{c.reach.toLocaleString("pt-BR")}</div></div>
-                    <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 3 }}>CLIQUES</div><div style={{ fontSize: 22, fontWeight: 900, color: "#c084fc", fontFamily: "'Cinzel', serif" }}>{c.clicks.toLocaleString("pt-BR")}</div></div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 3 }}>CTR</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa", fontFamily: "'Cinzel', serif" }}>{c.ctr}%</div>
-                      <div style={{ fontSize: 9, color: "#5a3a8a" }}>freq. {c.frequency}x</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-      }
-    </div>
-  );
-}
-
 // ─── LeadsView ─────────────────────────────────────────────────────────────
 const LEAD_STATUS_OPTIONS = ["Novo lead","Em contato","Mesa alocada","Desistiu","Lista de espera","Não respondeu","Número errado","Menor de 18 anos 🍼"];
 const LEAD_STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -1379,116 +1158,6 @@ function TableWithDrag({ filtered, loading, rows, updateRow, duplicateRow, remov
   );
 }
 // ─── Dashboard ─────────────────────────────────────────────────────────────
-function RevisaoView({ isMobile }: { isMobile: boolean }) {
-  const [posts, setPosts] = useState<any[]>([]);
-  const [revisoes, setRevisoes] = useState<Record<string, any>>({});
-  const [mes, setMes] = useState(new Date().getMonth());
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/postagens?select=*`, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
-      }).then(r => r.json()),
-      fetch(`${SUPABASE_URL}/rest/v1/revisoes?select=*`, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
-      }).then(r => r.json()),
-    ]).then(([allPosts, allRevisoes]) => {
-      const filtered = allPosts.filter((p: any) => {
-        if (!p.link_arquivo) return false;
-        const d = parseDateBR(p.data);
-        return d ? d.getMonth() === mes : false;
-      });
-      setPosts(filtered);
-      const map: Record<string, any> = {};
-      allRevisoes.forEach((r: any) => { map[r.postagem_id] = r; });
-      setRevisoes(map);
-    }).catch(console.error).finally(() => setLoading(false));
-  }, [mes]);
-
-  const aprovados  = Object.values(revisoes).filter((r: any) => r.status === "aprovado").length;
-  const rejeitados = Object.values(revisoes).filter((r: any) => r.status === "rejeitado").length;
-  const pendentes  = posts.length - aprovados - rejeitados;
-
-  const selectStyle: React.CSSProperties = { background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 8, padding: "9px 10px", fontFamily: "'Cinzel', serif", fontSize: 13, cursor: "pointer", outline: "none" };
-
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center", flexWrap: "wrap" }}>
-        <select value={mes} onChange={e => setMes(Number(e.target.value))} style={selectStyle}>
-          {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-        </select>
-        <span style={{ fontFamily: "'Cinzel',serif", fontSize: 10, color: "#5a3a8a", letterSpacing: 2 }}>
-          · LINK DO CLIENTE: <a href="/revisar" target="_blank" style={{ color: "#7c3aed" }}>seusite.vercel.app/revisar</a>
-        </span>
-      </div>
-
-      {/* Stats */}
-      {!loading && posts.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 24 }}>
-          {[
-            { label: "Pendentes",  val: pendentes,  color: "#c084fc", bg: "#3d2068", border: "#6b3fa0" },
-            { label: "Aprovados",  val: aprovados,  color: "#86efac", bg: "#1a3a1a", border: "#16a34a" },
-            { label: "Ajustes",    val: rejeitados, color: "#fca5a5", bg: "#3a1a1a", border: "#dc2626" },
-          ].map(s => (
-            <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
-              <div style={{ fontSize: isMobile ? 22 : 28, fontWeight: 900, color: s.color, fontFamily: "'Cinzel',serif" }}>{s.val}</div>
-              <div style={{ fontSize: 9, color: s.color, opacity: 0.8, fontFamily: "'Cinzel',serif", letterSpacing: 1 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {loading && <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-
-      {!loading && posts.length === 0 && (
-        <div style={{ textAlign: "center", padding: 60, color: "#5a3a8a", fontFamily: "'Cinzel',serif", fontSize: 13 }}>
-          Nenhum post com arquivo em {MONTHS[mes]}.
-        </div>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)", gap: 14 }}>
-        {posts.map(post => {
-          const rev = revisoes[post.id];
-          const links = parseLinks(post.link_arquivo || "");
-          const thumb = driveThumbnailUrl(links[0] || "");
-          const statusColor = rev?.status === "aprovado" ? "#16a34a" : rev?.status === "rejeitado" ? "#dc2626" : "#4a2a8a";
-          const statusLabel = rev?.status === "aprovado" ? "✓ Aprovado" : rev?.status === "rejeitado" ? "✕ Ajuste pedido" : "⏳ Pendente";
-
-          return (
-            <div key={post.id} style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: `1px solid ${statusColor}`, borderLeft: `4px solid ${statusColor}`, borderRadius: 14, overflow: "hidden" }}>
-              {thumb && <img src={thumb} alt="preview" style={{ width: "100%", maxHeight: 160, objectFit: "cover", display: "block" }} />}
-              <div style={{ padding: "14px 16px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                  <div>
-                    <div style={{ fontFamily: "'Cinzel',serif", fontSize: 14, fontWeight: 700, color: "#e2d0ff", marginBottom: 4 }}>{post.tema || post.postagem}</div>
-                    <div style={{ fontFamily: "'Cinzel',serif", fontSize: 10, color: "#5a3a8a" }}>
-                      {REDE_ICONS[post.rede] || ""} {post.rede} · {post.formato} · {post.data}
-                    </div>
-                  </div>
-                  <span style={{ background: statusColor, color: "#fff", borderRadius: 20, padding: "3px 10px", fontSize: 10, fontFamily: "'Cinzel',serif", fontWeight: 700, flexShrink: 0 }}>{statusLabel}</span>
-                </div>
-                {rev?.comentario && (
-                  <div style={{ background: "#0d0720", border: "1px solid #2d1b69", borderRadius: 8, padding: "8px 12px", fontFamily: "'Lato',sans-serif", fontSize: 12, color: "#a78bfa", fontStyle: "italic" }}>
-                    💬 "{rev.comentario}"
-                  </div>
-                )}
-                <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-  <button onClick={() => window.open(post.link_arquivo, "_blank")}
-    style={{ background: "#1a0d3a", border: "1px solid #4a2a8a", borderRadius: 8, color: "#c9a0f5", padding: "8px 14px", fontFamily: "'Cinzel',serif", fontSize: 12, cursor: "pointer" }}>
-    📎 Ver {parseLinks(post.link_arquivo).length} arquivo(s) no Drive ↗
-  </button>
-</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function Dashboard({ onVoltar }: { onVoltar: () => void }) {
   const isMobile = useIsMobile();
   const [rows, setRows]             = useState<Row[]>([]);
@@ -1673,7 +1342,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'Cinzel', serif", fontSize: isMobile ? 18 : 24, fontWeight: 900, background: "linear-gradient(90deg,#c084fc,#818cf8,#a855f7)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>Criando XP</div>
           <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#7c3aed", letterSpacing: 3, textTransform: "uppercase" }}>
-          {appTab === "calendario" ? "Calendário de Postagem" : appTab === "trafego" ? "Tráfego Pago · Meta Ads" : appTab === "leads" ? "Leads & Clientes" : appTab === "influencers" ? "Influencers & Links" : "Revisão de Conteúdo"}          </div>
+          {appTab === "calendario" ? "Calendário de Postagem" : appTab === "leads" ? "Leads & Clientes" : "Influencers & Links"}          </div>
         </div>
         <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-end" : "center", gap: 8, width: isMobile ? "100%" : "auto" }}>
           {appTab === "calendario" && urgentCount > 0 && (
@@ -1682,7 +1351,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
           {appTab === "calendario" && <span title={syncError || undefined} style={{ fontSize: 10, color: syncColor, animation: syncStatus === "saving" ? "blink 1s infinite" : "none" }}>{syncLabel}</span>}
           <button onClick={onVoltar} style={{ background: "transparent", border: "1px solid #4a2a8a", color: "#7c3aed", borderRadius: 8, padding: "6px 14px", fontFamily: "'Cinzel', serif", fontSize: 11, cursor: "pointer", letterSpacing: 1 }}>← Voltar</button>
           <div style={{ display: "flex", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, overflow: "hidden", width: isMobile ? "100%" : "auto" }}>
-          {([["calendario","📅"], ["trafego","📊"], ["leads","👥"], ["influencers","🔗"], ["revisao","📋"]] as [AppTab,string][]).map(([tab, icon]) => (
+          {([["calendario","📅"], ["leads","👥"], ["influencers","🔗"]] as [AppTab,string][]).map(([tab, icon]) => (
               <button key={tab} onClick={() => setAppTab(tab)}
                 style={{ flex: isMobile ? 1 : undefined, background: appTab === tab ? "linear-gradient(135deg,#4a2a8a,#7c3aed)" : "transparent", color: appTab === tab ? "#fff" : "#5a3a8a", border: "none", padding: isMobile ? "10px 0" : "8px 14px", fontFamily: "'Cinzel', serif", fontSize: isMobile ? 12 : 11, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>
                 {icon}
@@ -1793,10 +1462,8 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
         </>
       )}
 
-      {appTab === "trafego" && <TrafegoView isMobile={isMobile} />}
       {appTab === "leads"   && <LeadsView   isMobile={isMobile} />}
       {appTab === "influencers" && <InfluencersView isMobile={isMobile} />}
-      {appTab === "revisao"  && <RevisaoView  isMobile={isMobile} />}
 
       <div style={{ marginTop: 36, textAlign: "center", color: "#3d1b69", fontSize: 10, fontFamily: "'Cinzel', serif", letterSpacing: 2 }}>
         🎲 CRIANDO XP · DASHBOARD INTERNO
@@ -1808,8 +1475,6 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
 // ─── App Root ──────────────────────────────────────────────────────────────
 
 export default function App() {
-  if (window.location.pathname === "/revisar") return <RevisaoCliente />;
-
   const [page, setPage] = useState<AppPage>("landing");
   const [autenticado, setAutenticado] = useState(false);
   const [checandoSessao, setCheckandoSessao] = useState(true);
