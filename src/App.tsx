@@ -7,13 +7,6 @@ import zonad20Img from "../public/icons/zonad20.png";
 // ─── Supabase ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://zovgkatndrgzxocwpdjm.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvdmdrYXRuZHJnenhvY3dwZGptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MzY4MjEsImV4cCI6MjA5NTMxMjgyMX0.jm_BaUCN3CHPP9Rut2HM8KRVWes5nZLhJ_oyKbdqDXs";
-const HEADERS = {
-  "Content-Type": "application/json",
-  "apikey": SUPABASE_KEY,
-  "Authorization": `Bearer ${SUPABASE_KEY}`,
-};
-const TABLE = `${SUPABASE_URL}/rest/v1/postagens`;
-
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ─── Constantes ────────────────────────────────────────────────────────────
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -159,11 +152,10 @@ const makeRow = (n: number, mes: number): Row => ({
 
 // ─── Supabase ops ──────────────────────────────────────────────────────────
 async function dbLoad(mes: number): Promise<Row[]> {
-  const res = await fetch(`${TABLE}?select=*`, {
-    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const all: Row[] = await res.json();
+  const { data, error } = await supabase.from("postagens").select("*");
+  if (error) throw new Error(error.message);
+
+  const all = (data ?? []) as Row[];
   return all.filter(r => {
     const d = parseDateBR(r.data);
     return d ? d.getMonth() === mes : r.mes === mes;
@@ -171,29 +163,36 @@ async function dbLoad(mes: number): Promise<Row[]> {
 }
 
 async function dbUpsert(row: Row): Promise<void> {
-  const res = await fetch(`${TABLE}?on_conflict=id`, {
-    method: "POST",
-    headers: { ...HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify(row),
-  });
-  if (!res.ok) throw new Error(await res.text());
+  const { error } = await supabase
+    .from("postagens")
+    .upsert(row, { onConflict: "id" });
+  if (error) throw new Error(error.message);
 }
 
 async function dbPatch(id: string, patch: Partial<Row>): Promise<void> {
-  const res = await fetch(`${TABLE}?id=eq.${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    headers: { ...HEADERS, "Prefer": "return=minimal" },
-    body: JSON.stringify(patch),
-  });
-  if (!res.ok) throw new Error(await res.text());
+  const { data, error } = await supabase
+    .from("postagens")
+    .update(patch)
+    .eq("id", id)
+    .select("id");
+
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error("O Supabase não atualizou a postagem. Verifique a policy de UPDATE/RLS da tabela postagens para usuários autenticados.");
+  }
 }
 
 async function dbDelete(id: string): Promise<void> {
-  const res = await fetch(`${TABLE}?id=eq.${encodeURIComponent(id)}`, {
-    method: "DELETE",
-    headers: { ...HEADERS, "Prefer": "return=minimal" },
-  });
-  if (!res.ok) throw new Error(await res.text());
+  const { data, error } = await supabase
+    .from("postagens")
+    .delete()
+    .eq("id", id)
+    .select("id");
+
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error("O Supabase não excluiu a postagem. Verifique a policy de DELETE/RLS da tabela postagens para usuários autenticados.");
+  }
 }
 
 async function dbLoadLeads(): Promise<Lead[]> {
