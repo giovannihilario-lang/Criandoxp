@@ -21,7 +21,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const WEEKDAYS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const STATUS_OPTIONS = ["Planejado","Em produção","Agendado","Publicado","Cancelado"] as const;
-const FORMATO_OPTIONS = ["Post","Reels","Story","Carrossel","Live","Shorts","Thread"];
+const EXTRA_TIKTOK_FORMAT = "Vídeo extra TikTok";
+const FORMATO_OPTIONS = ["Post","Reels","Story","Carrossel","Live","Shorts","Thread", EXTRA_TIKTOK_FORMAT];
 const REDE_OPTIONS = ["Instagram","TikTok","YouTube","Twitter/X","Facebook","Todos"];
 type Status = typeof STATUS_OPTIONS[number];
 type ViewMode = "tabela" | "calendario";
@@ -180,11 +181,21 @@ async function dbUpsert(row: Row): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
+async function dbPatch(id: string, patch: Partial<Row>): Promise<void> {
+  const res = await fetch(`${TABLE}?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { ...HEADERS, "Prefer": "return=minimal" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 async function dbDelete(id: string): Promise<void> {
-  await fetch(`${TABLE}?id=eq.${id}`, {
+  const res = await fetch(`${TABLE}?id=eq.${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: { ...HEADERS, "Prefer": "return=minimal" },
   });
+  if (!res.ok) throw new Error(await res.text());
 }
 
 async function dbLoadLeads(): Promise<Lead[]> {
@@ -1173,6 +1184,19 @@ function PostagemCard({ row, idx, onUpdate, onDuplicate, onRemove }: {
   const urgency = getUrgency(row.data, row.status);
   const us = urgency ? URGENCY_STYLES[urgency] : null;
   const sc = STATUS_COLORS[row.status];
+
+  if (row.formato === EXTRA_TIKTOK_FORMAT) {
+    return (
+      <div style={{ background: "linear-gradient(90deg,#160a2b,#251044)", border: "1px solid #a855f7", borderLeft: "4px solid #d946ef", borderRadius: 12, padding: "12px 14px", marginBottom: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "130px 1fr auto", gap: 10, alignItems: "center" }}>
+          <EditableCell value={row.data} onChange={v => onUpdate(row.id, "data", v)} placeholder="dd/mm/aaaa" urgency={urgency} />
+          <div style={{ fontFamily: "'Cinzel',serif", fontWeight: 800, color: "#f0abfc", letterSpacing: 0.7 }}>🎵 VÍDEO EXTRA TIKTOK</div>
+          <button onClick={() => onRemove(row.id)} style={{ background: "none", border: "none", color: "#a78bfa", cursor: "pointer", fontSize: 18, minWidth: 36, minHeight: 36 }}>✕</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ background: us ? us.rowBg : sc.rowBg, border: `1px solid ${us ? us.border : sc.border}`, borderLeft: `4px solid ${us ? us.border : sc.border}`, borderRadius: 12, padding: "14px", marginBottom: 10 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -1274,6 +1298,25 @@ function TableWithDrag({ filtered, loading, rows, updateRow, duplicateRow, remov
 
             const baseBg     = us ? us.rowBg : sc.rowBg;
             const baseBorder = us ? us.border : sc.border;
+
+            if (row.formato === EXTRA_TIKTOK_FORMAT) {
+              return (
+                <tr key={row.id} style={{ background: "linear-gradient(90deg,#160a2b,#251044)", borderLeft: "3px solid #d946ef" }}>
+                  <td style={{ padding: "6px 4px", textAlign: "center", borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45" }}>
+                    <button onClick={() => removeRow(row.id)} title="Excluir" style={{ background: "none", border: "none", color: "#a78bfa", cursor: "pointer", fontSize: 14 }}>✕</button>
+                  </td>
+                  <td style={{ padding: "4px 6px", borderRight: "1px solid #1e0f45", borderBottom: "1px solid #1e0f45", width: 110 }}>
+                    <EditableCell value={row.data} onChange={val => updateRow(row.id, "data", val)} placeholder="dd/mm/aaaa" urgency={urgency} />
+                  </td>
+                  <td colSpan={COLS.length - 1} style={{ padding: "10px 16px", borderBottom: "1px solid #1e0f45", verticalAlign: "middle" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                      <div style={{ fontFamily: "'Cinzel',serif", fontSize: 12, fontWeight: 900, color: "#f0abfc", letterSpacing: 1.1 }}>🎵 VÍDEO EXTRA TIKTOK</div>
+                      <span style={{ fontFamily: "'Cinzel',serif", fontSize: 9, color: "#8b5cf6", opacity: 0.85 }}>linha especial</span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            }
 
             return (
               <tr
@@ -1461,7 +1504,10 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
   const [appTab, setAppTab]         = useState<AppTab>("calendario");
 
   const pendingUpserts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pendingPatches = useRef<Map<string, Partial<Row>>>(new Map());
+  const savingIds = useRef<Set<string>>(new Set());
   const rowsRef = useRef<Row[]>([]);
+  const [syncError, setSyncError] = useState("");
 
   const setRowsSafe = (updater: (prev: Row[]) => Row[]) => {
     setRows(prev => { const next = updater(prev); rowsRef.current = next; return next; });
@@ -1472,8 +1518,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
     try {
       const data = await dbLoad(m);
       setRows(prev => {
-        const pending = pendingUpserts.current;
-        const merged = data.map(sr => pending.has(sr.id) ? (prev.find(r => r.id === sr.id) ?? sr) : sr);
+        const merged = data.map(sr => (pendingUpserts.current.has(sr.id) || savingIds.current.has(sr.id)) ? (prev.find(r => r.id === sr.id) ?? sr) : sr);
         const serverIds = new Set(data.map(r => r.id));
         const result = [...merged, ...prev.filter(r => !serverIds.has(r.id))];
         rowsRef.current = result;
@@ -1493,39 +1538,86 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
     return () => clearInterval(interval);
   }, [mes, loadRows]);
 
-  const scheduleUpsert = useCallback((row: Row) => {
+  const persistPatch = useCallback(async (id: string, patch: Partial<Row>) => {
+    savingIds.current.add(id);
     setSyncStatus("saving");
-    const existing = pendingUpserts.current.get(row.id);
-    if (existing) clearTimeout(existing);
-    const t = setTimeout(async () => {
-      try { await dbUpsert(row); setSyncStatus("ok"); }
-      catch { setSyncStatus("error"); }
-      finally { pendingUpserts.current.delete(row.id); }
-    }, 1000);
-    pendingUpserts.current.set(row.id, t);
+    setSyncError("");
+    try {
+      await dbPatch(id, patch);
+      setSyncStatus("ok");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Falha ao salvar postagem", { id, patch, err });
+      setSyncError(message);
+      setSyncStatus("error");
+      throw err;
+    } finally {
+      savingIds.current.delete(id);
+    }
   }, []);
 
+  const schedulePatch = useCallback((id: string, patch: Partial<Row>, immediate = false) => {
+    const previousPatch = pendingPatches.current.get(id) ?? {};
+    pendingPatches.current.set(id, { ...previousPatch, ...patch });
+
+    const existing = pendingUpserts.current.get(id);
+    if (existing) clearTimeout(existing);
+
+    const flush = async () => {
+      const nextPatch = pendingPatches.current.get(id);
+      pendingPatches.current.delete(id);
+      pendingUpserts.current.delete(id);
+      if (!nextPatch || Object.keys(nextPatch).length === 0) return;
+      try { await persistPatch(id, nextPatch); } catch { /* erro já refletido na UI */ }
+    };
+
+    if (immediate) {
+      void flush();
+      return;
+    }
+
+    setSyncStatus("saving");
+    const timer = setTimeout(() => { void flush(); }, 650);
+    pendingUpserts.current.set(id, timer);
+  }, [persistPatch]);
+
   const updateRow = (id: string, key: keyof Row, val: string) => {
-    setRowsSafe(prev => {
-      const next = prev.map(r => {
-        if (r.id !== id) return r;
-        const updated = { ...r, [key]: val };
-        if (key === "data") {
-          const d = parseDateBR(val);
-          if (d) updated.mes = d.getMonth();
-        }
-        return updated;
-      });
-      const updated = next.find(r => r.id === id);
-      if (updated) scheduleUpsert(updated);
-      return next;
-    });
+    const current = rowsRef.current.find(r => r.id === id);
+    if (!current) return;
+
+    const patch: Partial<Row> = { [key]: val } as Partial<Row>;
+    if (key === "data") {
+      const d = parseDateBR(val);
+      if (d) patch.mes = d.getMonth();
+    }
+
+    setRowsSafe(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
+
+    const immediate = key === "status" || key === "rede" || key === "formato";
+    schedulePatch(id, patch, immediate);
   };
 
   const addRow = async () => {
     const row = makeRow(rowsRef.current.length + 1, mes);
     setRowsSafe(prev => [...prev, row]);
-    try { await dbUpsert(row); } catch { setSyncStatus("error"); }
+    setSyncStatus("saving");
+    try { await dbUpsert(row); setSyncStatus("ok"); }
+    catch (err) { setSyncError(err instanceof Error ? err.message : String(err)); setSyncStatus("error"); }
+  };
+
+  const addExtraTikTok = async () => {
+    const row: Row = {
+      ...makeRow(rowsRef.current.length + 1, mes),
+      postagem: EXTRA_TIKTOK_FORMAT,
+      tema: EXTRA_TIKTOK_FORMAT,
+      formato: EXTRA_TIKTOK_FORMAT,
+      rede: "TikTok",
+      status: "Planejado",
+    };
+    setRowsSafe(prev => [...prev, row]);
+    setSyncStatus("saving");
+    try { await dbUpsert(row); setSyncStatus("ok"); }
+    catch (err) { setSyncError(err instanceof Error ? err.message : String(err)); setSyncStatus("error"); }
   };
 
   const duplicateRow = async (source: Row) => {
@@ -1537,21 +1629,19 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
   const removeRow = async (id: string) => {
     const pending = pendingUpserts.current.get(id);
     if (pending) { clearTimeout(pending); pendingUpserts.current.delete(id); }
+    pendingPatches.current.delete(id);
     setRowsSafe(prev => prev.filter(r => r.id !== id));
-    try { await dbDelete(id); } catch { setSyncStatus("error"); }
+    try { await dbDelete(id); setSyncStatus("ok"); }
+    catch (err) { setSyncError(err instanceof Error ? err.message : String(err)); setSyncStatus("error"); }
   };
 
   const movePost = (rowId: string, newDateStr: string) => {
-    setRowsSafe(prev => {
-      const next = prev.map(r => {
-        if (r.id !== rowId) return r;
-        const d = parseDateBR(newDateStr);
-        const updated = { ...r, data: newDateStr, mes: d ? d.getMonth() : r.mes };
-        scheduleUpsert(updated);
-        return updated;
-      });
-      return next;
-    });
+    const current = rowsRef.current.find(r => r.id === rowId);
+    if (!current) return;
+    const d = parseDateBR(newDateStr);
+    const patch: Partial<Row> = { data: newDateStr, mes: d ? d.getMonth() : current.mes };
+    setRowsSafe(prev => prev.map(r => r.id === rowId ? { ...r, ...patch } : r));
+    schedulePatch(rowId, patch, true);
   };
 
   const dInicio = parseDateBR(filterDataInicio);
@@ -1589,7 +1679,7 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
           {appTab === "calendario" && urgentCount > 0 && (
             <span style={{ background: "#ef4444", color: "#fff", borderRadius: 20, padding: "4px 10px", fontSize: 11, fontFamily: "'Cinzel', serif", animation: "pulse-red 1s ease-in-out infinite" }}>⚡ {urgentCount} urgente{urgentCount > 1 ? "s" : ""}</span>
           )}
-          {appTab === "calendario" && <span style={{ fontSize: 10, color: syncColor, animation: syncStatus === "saving" ? "blink 1s infinite" : "none" }}>{syncLabel}</span>}
+          {appTab === "calendario" && <span title={syncError || undefined} style={{ fontSize: 10, color: syncColor, animation: syncStatus === "saving" ? "blink 1s infinite" : "none" }}>{syncLabel}</span>}
           <button onClick={onVoltar} style={{ background: "transparent", border: "1px solid #4a2a8a", color: "#7c3aed", borderRadius: 8, padding: "6px 14px", fontFamily: "'Cinzel', serif", fontSize: 11, cursor: "pointer", letterSpacing: 1 }}>← Voltar</button>
           <div style={{ display: "flex", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, overflow: "hidden", width: isMobile ? "100%" : "auto" }}>
           {([["calendario","📅"], ["trafego","📊"], ["leads","👥"], ["influencers","🔗"], ["revisao","📋"]] as [AppTab,string][]).map(([tab, icon]) => (
@@ -1655,7 +1745,10 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
                 {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
                 <CalendarView rows={filtered} mes={mes} onSelectDay={(r, d) => setSelectedDay(prev => prev?.day === d ? null : { day: d, rows: r })} isMobile={isMobile} onMovePost={movePost} />              </div>
               {selectedDay && <DayPanel day={selectedDay.day} mes={mes} rows={selectedDay.rows} onClose={() => setSelectedDay(null)} isMobile={isMobile} />}
-              <button onClick={addRow} style={{ marginTop: 14, background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, cursor: "pointer", width: isMobile ? "100%" : "auto" }}>+ Adicionar Postagem</button>
+              <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+                <button onClick={addRow} style={{ background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, cursor: "pointer", flex: isMobile ? "1 1 100%" : undefined }}>+ Adicionar Postagem</button>
+                <button onClick={addExtraTikTok} style={{ background: "#120925", color: "#f0abfc", border: "1px solid #a855f7", borderRadius: 10, padding: "12px 20px", fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700, cursor: "pointer", flex: isMobile ? "1 1 100%" : undefined }}>+ Vídeo extra TikTok</button>
+              </div>
             </div>
           )}
 
@@ -1691,7 +1784,10 @@ function Dashboard({ onVoltar }: { onVoltar: () => void }) {
         }}
       />
     )}
-    <button onClick={addRow} style={{ marginTop: 14, background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel',serif", fontSize: 13, fontWeight: 700, cursor: "pointer", width: isMobile ? "100%" : "auto" }}>+ Adicionar Postagem</button>
+    <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+      <button onClick={addRow} style={{ background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel',serif", fontSize: 13, fontWeight: 700, cursor: "pointer", flex: isMobile ? "1 1 100%" : undefined }}>+ Adicionar Postagem</button>
+      <button onClick={addExtraTikTok} style={{ background: "#120925", color: "#f0abfc", border: "1px solid #a855f7", borderRadius: 10, padding: "12px 20px", fontFamily: "'Cinzel',serif", fontSize: 12, fontWeight: 700, cursor: "pointer", flex: isMobile ? "1 1 100%" : undefined }}>+ Vídeo extra TikTok</button>
+    </div>
   </>
 )}
         </>
