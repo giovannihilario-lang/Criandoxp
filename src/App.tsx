@@ -221,9 +221,7 @@ function normalizeRow(raw: any): Row {
     followers_gained: Number(raw.followers_gained || 0), published_at: raw.published_at || null, created_at: raw.created_at,
   };
 }
-function parseLinks(raw: string): string[] { return raw.split(",").map(s => s.trim()).filter(Boolean); }
 function driveFileId(url: string): string | null { return url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ?? null; }
-function driveThumbnailUrl(url: string): string | null { const id = driveFileId(url); return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w500` : null; }
 function humanDateTime(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
