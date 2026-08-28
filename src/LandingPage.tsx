@@ -25,7 +25,7 @@ function trackMetaLead(): void {
 }
 
 async function salvarCliente(data: Record<string, string>): Promise<void> {
-  const res = await fetch(CLIENTES_TABLE, {
+  const send = (payload: Record<string, string>) => fetch(CLIENTES_TABLE, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -33,9 +33,23 @@ async function salvarCliente(data: Record<string, string>): Promise<void> {
       "Authorization": `Bearer ${SUPABASE_KEY}`,
       "Prefer": "return=minimal",
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(await res.text());
+
+  let res = await send(data);
+  if (res.ok) return;
+
+  // Compatibilidade durante a implantação da migração do CRM: se as novas
+  // colunas ainda não existirem no Supabase, não derruba a inscrição pública.
+  const firstError = await res.text();
+  if (firstError.includes("origem") || firstError.includes("utm_source") || firstError.includes("influencer_codigo") || firstError.includes("PGRST204")) {
+    const legacy = { ...data };
+    ["origem", "utm_source", "utm_campaign", "influencer_codigo"].forEach(k => delete legacy[k]);
+    res = await send(legacy);
+    if (res.ok) return;
+    throw new Error(await res.text());
+  }
+  throw new Error(firstError);
 }
 
 // ─── UTM / origem ─────────────────────────────────────────────────────────
@@ -54,6 +68,16 @@ function getOrigem(): string {
   if (ref2.includes("facebook"))  return "Facebook (referrer)";
   if (ref2.includes("twitter") || ref2.includes("t.co")) return "Twitter/X (referrer)";
   return ref2 ? `Outro: ${ref2}` : "Direto";
+}
+
+function getTrackingData() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    origem: getOrigem(),
+    utm_source: params.get("utm_source") || "",
+    utm_campaign: params.get("utm_campaign") || "",
+    influencer_codigo: (params.get("ref") || "").toLowerCase().trim(),
+  };
 }
 
 // ─── Cliques de influencer ─────────────────────────────────────────────────
@@ -513,7 +537,7 @@ function Formulario({ onVoltar }: { onVoltar: () => void }) {
     setEnviando(true);
     setErro("");
     try {
-      const origem = getOrigem();
+      const tracking = getTrackingData();
       await salvarCliente({
         nome:                 form.nome,
         idade:                form.idade,
@@ -532,7 +556,11 @@ function Formulario({ onVoltar }: { onVoltar: () => void }) {
         pronto_ingressar:     form.pronto_ingressar,
         codigo_desconto:      form.codigo_desconto,
         status:               "Novo lead",
-        notas:                `Origem: ${origem}`,
+        origem:               tracking.origem,
+        utm_source:           tracking.utm_source,
+        utm_campaign:         tracking.utm_campaign,
+        influencer_codigo:    tracking.influencer_codigo,
+        notas:                `Origem: ${tracking.origem}`,
       });
       trackMetaLead();
       setEnviado(true);

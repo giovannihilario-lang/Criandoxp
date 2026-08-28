@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createClient } from "@supabase/supabase-js";
 import LandingPage from "./LandingPage";
 import mayoouImg from "../public/icons/mayoou.png";
@@ -8,94 +8,48 @@ import zonad20Img from "../public/icons/zonad20.png";
 const SUPABASE_URL = "https://zovgkatndrgzxocwpdjm.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvdmdrYXRuZHJnenhvY3dwZGptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MzY4MjEsImV4cCI6MjA5NTMxMjgyMX0.jm_BaUCN3CHPP9Rut2HM8KRVWes5nZLhJ_oyKbdqDXs";
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
 // ─── Constantes ────────────────────────────────────────────────────────────
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const WEEKDAYS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
-const STATUS_OPTIONS = ["Planejado","Em produção","Agendado","Publicado","Cancelado"] as const;
+const STATUS_OPTIONS = ["Ideia","Roteiro","Produção","Edição","Agendado","Publicado","Cancelado"] as const;
+const FLOW_STATUS = STATUS_OPTIONS.filter(s => s !== "Cancelado") as Status[];
 const EXTRA_TIKTOK_FORMAT = "Vídeo extra TikTok";
 const FORMATO_OPTIONS = ["Post","Reels","Story","Carrossel","Live","Shorts","Thread", EXTRA_TIKTOK_FORMAT];
 const REDE_OPTIONS = ["Instagram","TikTok","YouTube","Twitter/X","Facebook","Todos"];
+const CURRENT_ACTOR = "Giovanni";
+
 type Status = typeof STATUS_OPTIONS[number];
-type ViewMode = "tabela" | "calendario";
-type AppTab = "calendario" | "leads" | "influencers";
+type ViewMode = "tabela" | "calendario" | "kanban";
+type CalendarScope = "mes" | "semana";
+type AppTab = "hoje" | "conteudo" | "produtividade" | "leads" | "influencers";
 type AppPage = "landing" | "dashboard";
 
-const REDE_ICONS: Record<string, string> = {
-  "Instagram": "📸",
-  "TikTok":    "🎵",
-  "YouTube":   "▶️",
-  "Twitter/X": "𝕏",
-  "Facebook":  "👤",
-  "Todos":     "🌐",
-};
-
-const STATUS_COLORS: Record<Status, { bg: string; text: string; border: string; rowBg: string; calBg: string }> = {
-  "Planejado":    { bg: "#3d2068", text: "#c9a0f5", border: "#6b3fa0", rowBg: "rgba(61,32,104,0.18)",  calBg: "#3d2068dd" },
-  "Em produção":  { bg: "#2a1a5e", text: "#93c5fd", border: "#3b5bdb", rowBg: "rgba(42,26,94,0.22)",   calBg: "#2a1a5edd" },
-  "Agendado":     { bg: "#1e3a5f", text: "#6ee7b7", border: "#059669", rowBg: "rgba(30,58,95,0.22)",   calBg: "#1e3a5fdd" },
-  "Publicado":    { bg: "#1a3a1a", text: "#86efac", border: "#16a34a", rowBg: "rgba(26,58,26,0.22)",   calBg: "#1a3a1add" },
-  "Cancelado":    { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626", rowBg: "rgba(58,26,26,0.22)",   calBg: "#3a1a1add" },
-};
-
-// ─── Helpers ───────────────────────────────────────────────────────────────
-function parseDateBR(dateStr: string): Date | null {
-  if (!dateStr) return null;
-  const [d, m, y] = dateStr.split("/");
-  if (!d || !m || !y) return null;
-  const date = new Date(Number(y), Number(m) - 1, Number(d));
-  return isNaN(date.getTime()) ? null : date;
+interface ChecklistItem {
+  id: string;
+  label: string;
+  done: boolean;
 }
 
-type Urgency = "hoje" | "amanha" | "em2" | "em3" | null;
-
-function getUrgency(dateStr: string, status: Status): Urgency {
-  if (status === "Publicado" || status === "Cancelado") return null;
-  const date = parseDateBR(dateStr);
-  if (!date) return null;
-  const today = new Date(); today.setHours(0,0,0,0);
-  date.setHours(0,0,0,0);
-  const diff = Math.round((date.getTime() - today.getTime()) / 86400000);
-  if (diff === 0) return "hoje";
-  if (diff === 1) return "amanha";
-  if (diff === 2) return "em2";
-  if (diff === 3) return "em3";
-  return null;
+interface HistoryItem {
+  at: string;
+  actor: string;
+  field: string;
+  from: string;
+  to: string;
 }
 
-function driveFileId(url: string): string | null {
-  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  return match ? match[1] : null;
-}
-
-function parseLinks(raw: string): string[] {
-  return raw.split(",").map(s => s.trim()).filter(Boolean);
-}
-
-function drivePreviewUrl(url: string): string | null {
-  const id = driveFileId(url);
-  if (id) return `https://drive.google.com/file/d/${id}/preview`;
-  return url.startsWith("http") ? url : null;
-}
-
-function driveThumbnailUrl(url: string): string | null {
-  const id = driveFileId(url);
-  return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : null;
-}
-
-const URGENCY_STYLES: Record<NonNullable<Urgency>, { border: string; rowBg: string; badge: string; badgeBg: string; badgeColor: string; anim: string }> = {
-  hoje:   { border: "#ef4444", rowBg: "rgba(239,68,68,0.13)",   badge: "HOJE",   badgeBg: "#ef4444", badgeColor: "#fff",    anim: "pulse-red 1s ease-in-out infinite" },
-  amanha: { border: "#f59e0b", rowBg: "rgba(245,158,11,0.12)",  badge: "AMANHÃ", badgeBg: "#f59e0b", badgeColor: "#1a0d3a", anim: "pulse-yellow 1.5s ease-in-out infinite" },
-  em2:    { border: "#fcd34d", rowBg: "rgba(252,211,77,0.08)",  badge: "2 DIAS", badgeBg: "#fcd34d", badgeColor: "#1a0d3a", anim: "none" },
-  em3:    { border: "#6ee7b7", rowBg: "rgba(110,231,183,0.07)", badge: "3 DIAS", badgeBg: "#059669", badgeColor: "#fff",    anim: "none" },
-};
-
-// ─── Types ─────────────────────────────────────────────────────────────────
 interface Row {
   id: string;
   postagem: string;
   data: string;
+  data_iso: string | null;
   tema: string;
   briefing: string;
+  hook: string;
+  roteiro: string;
+  cta: string;
+  referencias: string;
   formato: string;
   rede: string;
   responsavel: string;
@@ -103,6 +57,15 @@ interface Row {
   observacoes: string;
   mes: number;
   link_arquivo: string;
+  checklist: ChecklistItem[];
+  historico: HistoryItem[];
+  views: number;
+  likes: number;
+  shares: number;
+  saves: number;
+  followers_gained: number;
+  published_at: string | null;
+  created_at?: string;
 }
 
 interface Lead {
@@ -120,53 +83,250 @@ interface Lead {
   notas: string;
   codigo_desconto: string;
   pronto_ingressar: string;
+  origem?: string;
+  utm_source?: string;
+  utm_campaign?: string;
+  influencer_codigo?: string;
+  proxima_acao?: string;
+  follow_up_date?: string;
+  responsavel?: string;
+  ultimo_contato?: string;
+  anotacao_rapida?: string;
 }
 
-interface ColDef {
-  key: keyof Row;
+interface Influencer {
+  id: string;
+  created_at: string;
+  nome: string;
+  codigo: string;
+  ativo: boolean;
+  clicks: number;
+}
+
+interface TemplateDef {
+  id: string;
   label: string;
-  width: number;
-  type: "text" | "select" | "select-simple";
-  options?: readonly string[];
-  placeholder?: string;
-  wide?: boolean;
+  rede: string;
+  formato: string;
+  tema: string;
+  icon: string;
 }
 
-const COLS: ColDef[] = [
-  { key: "postagem",    label: "Postagem",     width: 90,  type: "text",          placeholder: "Postagem" },
-  { key: "data",        label: "📅 Data",       width: 110, type: "text",          placeholder: "dd/mm/aaaa" },
-  { key: "rede",        label: "🌐 Rede",        width: 110, type: "select-simple", options: REDE_OPTIONS },
-  { key: "formato",     label: "🎞 Formato",     width: 110, type: "select-simple", options: FORMATO_OPTIONS },
-  { key: "tema",        label: "✨ Tema",         width: 160, type: "text",          placeholder: "Título / tema", wide: true },
-  { key: "responsavel", label: "👤 Responsável", width: 120, type: "text",          placeholder: "Nome" },
-  { key: "link_arquivo", label: "🔗 Arquivo", width: 60, type: "text", placeholder: "Link do Drive" },
-  { key: "status",      label: "🔮 Status",      width: 130, type: "select",        options: STATUS_OPTIONS },
+const REDE_ICONS: Record<string, string> = {
+  Instagram: "📸",
+  TikTok: "🎵",
+  YouTube: "▶️",
+  "Twitter/X": "𝕏",
+  Facebook: "👤",
+  Todos: "🌐",
+};
+
+const STATUS_COLORS: Record<Status, { bg: string; text: string; border: string; rowBg: string; calBg: string }> = {
+  Ideia:      { bg: "#32204f", text: "#d8b4fe", border: "#7e22ce", rowBg: "rgba(126,34,206,.12)", calBg: "#4c1d95dd" },
+  Roteiro:    { bg: "#2a2659", text: "#c4b5fd", border: "#6366f1", rowBg: "rgba(99,102,241,.12)", calBg: "#3730a3dd" },
+  Produção:   { bg: "#1f3155", text: "#93c5fd", border: "#3b82f6", rowBg: "rgba(59,130,246,.12)", calBg: "#1d4ed8dd" },
+  Edição:     { bg: "#27364a", text: "#67e8f9", border: "#0891b2", rowBg: "rgba(8,145,178,.12)", calBg: "#0e7490dd" },
+  Agendado:   { bg: "#163b38", text: "#6ee7b7", border: "#10b981", rowBg: "rgba(16,185,129,.11)", calBg: "#047857dd" },
+  Publicado:  { bg: "#19391f", text: "#86efac", border: "#16a34a", rowBg: "rgba(22,163,74,.11)", calBg: "#15803ddd" },
+  Cancelado:  { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626", rowBg: "rgba(220,38,38,.09)", calBg: "#991b1bdd" },
+};
+
+const TEMPLATES: TemplateDef[] = [
+  { id: "reels", label: "Reels Criando XP", rede: "Instagram", formato: "Reels", tema: "", icon: "🎬" },
+  { id: "meme", label: "Post de meme", rede: "Instagram", formato: "Post", tema: "Meme", icon: "🃏" },
+  { id: "caixinha", label: "Caixinha / Story", rede: "Instagram", formato: "Story", tema: "Caixinha", icon: "❔" },
+  { id: "carrossel", label: "Carrossel D&D", rede: "Instagram", formato: "Carrossel", tema: "D&D", icon: "📚" },
+  { id: "tiktok", label: "Vídeo extra TikTok", rede: "TikTok", formato: EXTRA_TIKTOK_FORMAT, tema: EXTRA_TIKTOK_FORMAT, icon: "🎵" },
+  { id: "shorts", label: "YouTube Shorts", rede: "YouTube", formato: "Shorts", tema: "", icon: "▶️" },
 ];
 
-const makeRow = (n: number, mes: number): Row => ({
-  id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  postagem: `Postagem ${n}`, data: "", tema: "", briefing: "",
-  formato: "", rede: "", responsavel: "", status: "Planejado",
-  observacoes: "", mes,link_arquivo: "",
-});
+const LEAD_STATUS_OPTIONS = ["Novo lead","Em contato","Mesa alocada","Desistiu","Lista de espera","Não respondeu","Número errado","Menor de 18 anos 🍼"];
+const LEAD_STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  "Novo lead":      { bg: "#3d2068", text: "#c9a0f5", border: "#6b3fa0" },
+  "Em contato":     { bg: "#2a1a5e", text: "#93c5fd", border: "#3b5bdb" },
+  "Mesa alocada":   { bg: "#1a3a1a", text: "#86efac", border: "#16a34a" },
+  "Desistiu":       { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626" },
+  "Lista de espera":{ bg: "#1e3a5f", text: "#6ee7b7", border: "#059669" },
+  "Não respondeu":  { bg: "#2a2a2a", text: "#9ca3af", border: "#4b5563" },
+  "Número errado":  { bg: "#3a2a1a", text: "#fbbf24", border: "#b45309" },
+  "Menor de 18 anos 🍼": { bg: "#3a1a2e", text: "#f9a8d4", border: "#be185d" },
+};
 
-// ─── Supabase ops ──────────────────────────────────────────────────────────
+const LEAD_CHANNELS = [
+  { label: "Meta Ads", icon: "/icons/facebook.png", chaves: ["meta", "facebook"] },
+  { label: "Instagram", icon: "/icons/instagram.png", chaves: ["instagram"] },
+  { label: "TikTok", icon: "/icons/tiktok.png", chaves: ["tiktok"] },
+  { label: "Mayoou", icon: mayoouImg, chaves: ["mayoou"] },
+  { label: "Zonad20", icon: zonad20Img, chaves: ["zonad20", "zonad"] },
+];
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+function pad(n: number) { return String(n).padStart(2, "0"); }
+function parseDateBR(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y,m,d] = dateStr.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  }
+  const [d,m,y] = dateStr.split("/").map(Number);
+  if (!d || !m || !y) return null;
+  const dt = new Date(y, m - 1, d);
+  if (Number.isNaN(dt.getTime()) || dt.getDate() !== d || dt.getMonth() !== m - 1 || dt.getFullYear() !== y) return null;
+  return dt;
+}
+function isoToBR(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = parseDateBR(iso);
+  return d ? `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}` : "";
+}
+function brToISO(br: string): string | null {
+  const d = parseDateBR(br);
+  return d ? `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` : null;
+}
+function dateInputValue(row: Row): string { return row.data_iso || brToISO(row.data) || ""; }
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function tomorrowISO(): string {
+  const d = new Date(); d.setDate(d.getDate()+1);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function isDone(status: Status) { return status === "Publicado" || status === "Cancelado"; }
+function isOverdue(r: Row): boolean {
+  const iso = dateInputValue(r);
+  return !!iso && iso < todayISO() && !isDone(r.status);
+}
+function legacyStatus(status: unknown): Status {
+  if (status === "Planejado") return "Ideia";
+  if (status === "Em produção") return "Produção";
+  return STATUS_OPTIONS.includes(status as Status) ? status as Status : "Ideia";
+}
+function normalizeChecklist(v: unknown): ChecklistItem[] {
+  return Array.isArray(v) ? v.filter(Boolean).map((x: any, i) => ({ id: String(x.id ?? `item-${i}`), label: String(x.label ?? "Item"), done: !!x.done })) : [];
+}
+function normalizeHistory(v: unknown): HistoryItem[] {
+  return Array.isArray(v) ? v.filter(Boolean).map((x: any) => ({ at: String(x.at ?? ""), actor: String(x.actor ?? ""), field: String(x.field ?? ""), from: String(x.from ?? ""), to: String(x.to ?? "") })) : [];
+}
+function normalizeRow(raw: any): Row {
+  const iso = raw.data_iso || brToISO(raw.data || "");
+  return {
+    id: String(raw.id), postagem: raw.postagem || "Postagem", data: raw.data || isoToBR(iso), data_iso: iso,
+    tema: raw.tema || "", briefing: raw.briefing || "", hook: raw.hook || "", roteiro: raw.roteiro || "", cta: raw.cta || "",
+    referencias: raw.referencias || "", formato: raw.formato || "", rede: raw.rede || "", responsavel: raw.responsavel || "",
+    status: legacyStatus(raw.status), observacoes: raw.observacoes || "", mes: Number.isFinite(Number(raw.mes)) ? Number(raw.mes) : (iso ? Number(iso.slice(5,7))-1 : new Date().getMonth()),
+    link_arquivo: raw.link_arquivo || "", checklist: normalizeChecklist(raw.checklist), historico: normalizeHistory(raw.historico),
+    views: Number(raw.views || 0), likes: Number(raw.likes || 0), shares: Number(raw.shares || 0), saves: Number(raw.saves || 0),
+    followers_gained: Number(raw.followers_gained || 0), published_at: raw.published_at || null, created_at: raw.created_at,
+  };
+}
+function parseLinks(raw: string): string[] { return raw.split(",").map(s => s.trim()).filter(Boolean); }
+function driveFileId(url: string): string | null { return url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ?? null; }
+function driveThumbnailUrl(url: string): string | null { const id = driveFileId(url); return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w500` : null; }
+function humanDateTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+function prettyField(field: string): string {
+  const map: Record<string,string> = { status:"Status", data:"Data", rede:"Rede", formato:"Formato", responsavel:"Responsável", checklist:"Checklist", published_at:"Publicação" };
+  return map[field] || field;
+}
+function sourceText(lead: Lead): string {
+  return [lead.origem, lead.utm_source, lead.utm_campaign, lead.influencer_codigo, lead.notas].filter(Boolean).join(" · ");
+}
+function makeChecklist(format: string): ChecklistItem[] {
+  const labels = format === EXTRA_TIKTOK_FORMAT
+    ? ["Gravar", "Editar", "Publicar"]
+    : format === "Reels" || format === "Shorts"
+      ? ["Roteiro", "Gravação", "Edição", "Legenda", "Capa", "Agendamento"]
+      : format === "Carrossel"
+        ? ["Copy", "Design", "Legenda", "Agendamento"]
+        : format === "Story"
+          ? ["Copy", "Arte/Gravação", "Publicação"]
+          : ["Copy/Roteiro", "Produção", "Legenda", "Agendamento"];
+  return labels.map((label, i) => ({ id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2,6)}`, label, done: false }));
+}
+function makeHistory(field: string, from: unknown, to: unknown): HistoryItem {
+  return { at: new Date().toISOString(), actor: CURRENT_ACTOR, field, from: String(from ?? ""), to: String(to ?? "") };
+}
+function makeRow(n: number, mes: number, dateISO = "", partial: Partial<Row> = {}): Row {
+  const format = partial.formato || "";
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    postagem: partial.postagem || `Postagem ${n}`,
+    data: dateISO ? isoToBR(dateISO) : "",
+    data_iso: dateISO || null,
+    tema: partial.tema || "", briefing: partial.briefing || "", hook: partial.hook || "", roteiro: partial.roteiro || "", cta: partial.cta || "",
+    referencias: partial.referencias || "", formato: format, rede: partial.rede || "", responsavel: partial.responsavel || "",
+    status: partial.status || "Ideia", observacoes: partial.observacoes || "", mes: dateISO ? Number(dateISO.slice(5,7))-1 : mes,
+    link_arquivo: partial.link_arquivo || "", checklist: partial.checklist || makeChecklist(format), historico: partial.historico || [],
+    views: partial.views || 0, likes: partial.likes || 0, shares: partial.shares || 0, saves: partial.saves || 0,
+    followers_gained: partial.followers_gained || 0, published_at: partial.published_at || null,
+  };
+}
+
+// ─── Banco ─────────────────────────────────────────────────────────────────
 async function dbLoad(mes: number): Promise<Row[]> {
-  const { data, error } = await supabase.from("postagens").select("*");
-  if (error) throw new Error(error.message);
+  // Usa o cliente autenticado do Supabase. Assim as policies de RLS enxergam
+  // o usuário logado, em vez de receberem sempre a anon key no Authorization.
+  const primary = await supabase
+    .from("postagens")
+    .select("*")
+    .eq("mes", mes)
+    .order("data_iso", { ascending: true });
 
-  const all = (data ?? []) as Row[];
-  return all.filter(r => {
-    const d = parseDateBR(r.data);
-    return d ? d.getMonth() === mes : r.mes === mes;
-  });
+  if (!primary.error) return (primary.data ?? []).map(normalizeRow);
+
+  // Compatibilidade de deploy: antes da migração criar data_iso, ainda consegue
+  // abrir o calendário usando o campo mes legado.
+  const msg = primary.error.message || "";
+  if (msg.includes("data_iso") || msg.includes("PGRST") || msg.includes("schema cache")) {
+    const fallback = await supabase
+      .from("postagens")
+      .select("*")
+      .eq("mes", mes);
+
+    if (fallback.error) throw new Error(fallback.error.message);
+    return (fallback.data ?? []).map(normalizeRow);
+  }
+
+  throw new Error(primary.error.message);
+}
+
+async function dbLoadAllRows(): Promise<Row[]> {
+  const { data, error } = await supabase
+    .from("postagens")
+    .select("*");
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(normalizeRow);
 }
 
 async function dbUpsert(row: Row): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("postagens")
-    .upsert(row, { onConflict: "id" });
+    .upsert(row, { onConflict: "id" })
+    .select("id");
+
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error("O Supabase não salvou a postagem. Verifique as policies de INSERT/UPDATE/RLS da tabela postagens para usuários autenticados.");
+  }
+}
+
+async function dbUpsertMany(rows: Row[]): Promise<void> {
+  if (!rows.length) return;
+
+  const { data, error } = await supabase
+    .from("postagens")
+    .upsert(rows, { onConflict: "id" })
+    .select("id");
+
+  if (error) throw new Error(error.message);
+  if (!data || data.length !== rows.length) {
+    throw new Error("O Supabase não salvou todas as postagens. Verifique as policies de INSERT/UPDATE/RLS da tabela postagens para usuários autenticados.");
+  }
 }
 
 async function dbPatch(id: string, patch: Partial<Row>): Promise<void> {
@@ -196,1348 +356,338 @@ async function dbDelete(id: string): Promise<void> {
 }
 
 async function dbLoadLeads(): Promise<Lead[]> {
-  const { data, error } = await supabase
-    .from("clientes")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const { data, error } = await supabase.from("clientes").select("*").order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return data as Lead[];
+  return (data || []) as Lead[];
 }
-
-async function dbUpdateLeadStatus(id: string, status: string): Promise<void> {
-  const { error } = await supabase.from("clientes").update({ status }).eq("id", id);
-  if (error) console.error(error.message);
+async function dbUpdateLead(id: string, patch: Partial<Lead>): Promise<void> {
+  const { error } = await supabase.from("clientes").update(patch).eq("id", id);
+  if (error) throw new Error(error.message);
 }
-
-// ─── Influencers ────────────────────────────────────────────────────────────
-interface Influencer {
-  id: string;
-  created_at: string;
-  nome: string;
-  codigo: string;
-  ativo: boolean;
-  clicks: number;
+async function dbCreateLead(payload: Partial<Lead>): Promise<void> {
+  const { error } = await supabase.from("clientes").insert(payload);
+  if (error) throw new Error(error.message);
 }
-
-function slugifyCodigo(s: string): string {
-  return s
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "")
-    .trim();
-}
-
 async function dbLoadInfluencers(): Promise<Influencer[]> {
   const { data, error } = await supabase.from("influencers").select("*").order("clicks", { ascending: false });
   if (error) throw new Error(error.message);
-  return data as Influencer[];
+  return (data || []) as Influencer[];
 }
-
 async function dbCreateInfluencer(nome: string, codigo: string): Promise<void> {
   const { error } = await supabase.from("influencers").insert({ nome, codigo });
   if (error) throw new Error(error.message);
 }
-
 async function dbUpdateInfluencer(id: string, patch: Partial<Influencer>): Promise<void> {
   const { error } = await supabase.from("influencers").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
 }
-
 async function dbDeleteInfluencer(id: string): Promise<void> {
   const { error } = await supabase.from("influencers").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
+function slugifyCodigo(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
+}
 
-// ─── Hook responsivo ───────────────────────────────────────────────────────
+// ─── UI base ───────────────────────────────────────────────────────────────
 function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  useEffect(() => {
-    const h = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener("resize", h);
-    return () => window.removeEventListener("resize", h);
-  }, []);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 800);
+  useEffect(() => { const h = () => setIsMobile(window.innerWidth < 800); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, []);
   return isMobile;
 }
 
-// ─── CSS global ───────────────────────────────────────────────────────────
 const GLOBAL_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Lato:wght@300;400;700&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: #0d0720; }
-  ::-webkit-scrollbar-thumb { background: #4a2a8a; border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: #7c3aed; }
-  @keyframes float        { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-  @keyframes glow         { 0%,100%{box-shadow:0 0 20px #7c3aed44} 50%{box-shadow:0 0 40px #7c3aed88} }
-  @keyframes blink        { 0%,100%{opacity:1} 50%{opacity:0.4} }
-  @keyframes spin         { to{transform:rotate(360deg)} }
-  @keyframes pulse-red    { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.5)} 50%{box-shadow:0 0 0 4px rgba(239,68,68,0)} }
-  @keyframes pulse-yellow { 0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.5)} 50%{box-shadow:0 0 0 4px rgba(245,158,11,0)} }
-  @keyframes shimmer      { 0%{background-position:200% center} 100%{background-position:-200% center} }
-  @keyframes fadeUp       { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes gridPulse    { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
-  @keyframes popIn        { 0%{transform:scale(0.85);opacity:0} 100%{transform:scale(1);opacity:1} }
-  input::placeholder { color: #5a3a8a; }
-  select, button, input { -webkit-tap-highlight-color: transparent; }
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Lato:wght@300;400;700&display=swap');
+*{box-sizing:border-box} body{margin:0;background:#0d0720} button,input,select,textarea{font:inherit} button{touch-action:manipulation}
+::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-track{background:#0d0720}::-webkit-scrollbar-thumb{background:#4a2a8a;border-radius:8px}
+@keyframes spin{to{transform:rotate(360deg)}} @keyframes blink{50%{opacity:.45}} @keyframes pulse{50%{box-shadow:0 0 0 5px transparent}}
+.cxp-shell{min-height:100vh;background:radial-gradient(circle at 15% 0%,#2a1655 0,transparent 28%),linear-gradient(135deg,#0d0720,#150b2d 50%,#0d0720);color:#e2d0ff;padding:18px 16px 40px;text-align:left}
+.cxp-wrap{width:min(1500px,100%);margin:0 auto}.cxp-card{background:linear-gradient(145deg,#160b31,#100722);border:1px solid #2d1b69;border-radius:14px}.cxp-card:hover{border-color:#4a2a8a}
+.cxp-btn{border:1px solid #4a2a8a;background:#160b31;color:#c9a0f5;border-radius:9px;padding:9px 13px;cursor:pointer;font-family:'Cinzel',serif;font-size:11px}.cxp-btn:hover{border-color:#8b5cf6;background:#211042}.cxp-btn.primary{background:linear-gradient(135deg,#6d28d9,#9333ea);color:#fff;border:none;font-weight:700}.cxp-btn.danger{border-color:#7f1d1d;color:#fca5a5}.cxp-btn.green{border-color:#166534;color:#86efac}
+.cxp-input{width:100%;background:#0d0720;border:1px solid #3d246f;border-radius:8px;padding:9px 10px;color:#e2d0ff;outline:none;font-family:'Lato',sans-serif;font-size:13px}.cxp-input:focus{border-color:#8b5cf6;box-shadow:0 0 0 2px rgba(139,92,246,.12)} textarea.cxp-input{resize:vertical;min-height:84px}
+.cxp-label{font-family:'Cinzel',serif;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#7c5caf;margin-bottom:5px}.cxp-title{font-family:'Cinzel',serif;font-weight:900}.cxp-muted{color:#6f5a95}.cxp-grid-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.cxp-kpi{padding:14px}.cxp-kpi strong{display:block;font-family:'Cinzel',serif;font-size:24px;margin-top:5px}.cxp-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid #3d246f;background:#120925;color:#a78bfa;border-radius:999px;padding:5px 9px;font:700 9px 'Cinzel',serif;cursor:pointer}.cxp-chip.active{border-color:#8b5cf6;background:#3b1d73;color:#fff}.cxp-nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}.cxp-nav button{white-space:nowrap}.cxp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.68);z-index:1000}.cxp-modal{position:fixed;z-index:1001;left:50%;top:50%;transform:translate(-50%,-50%);width:min(680px,calc(100vw - 24px));max-height:88vh;overflow:auto;background:#100722;border:1px solid #5b32a3;border-radius:16px;box-shadow:0 30px 90px #000;padding:18px}.cxp-drawer{position:fixed;z-index:1002;right:0;top:0;height:100vh;width:min(620px,100vw);overflow:auto;background:#100722;border-left:1px solid #5b32a3;box-shadow:-30px 0 80px #000;padding:18px}
+.cxp-table{width:100%;border-collapse:collapse;min-width:940px}.cxp-table th{position:sticky;top:0;z-index:2;background:#24104a;color:#c084fc;font:700 9px 'Cinzel',serif;text-transform:uppercase;letter-spacing:1px;padding:10px;border-right:1px solid #3d246f}.cxp-table td{padding:7px;border-right:1px solid #211042;border-bottom:1px solid #211042;vertical-align:middle}.cxp-table tr:hover td{background:rgba(124,58,237,.05)}
+.cxp-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}.cxp-day{min-height:118px;background:#100722;border:1px solid #2d1b69;border-radius:9px;padding:6px;position:relative}.cxp-day.today{border:2px solid #7c3aed}.cxp-day.drop{outline:2px dashed #c084fc;background:#251044}.cxp-day.empty{opacity:.3}.cxp-daypost{padding:4px 6px;border-radius:5px;margin-top:4px;font-size:10px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cxp-kanban{display:grid;grid-template-columns:repeat(6,minmax(210px,1fr));gap:10px;overflow-x:auto;padding-bottom:8px}.cxp-kanban-col{min-height:500px;padding:10px;background:#0f071f;border:1px solid #2d1b69;border-radius:12px}.cxp-kanban-card{padding:10px;border-radius:9px;margin-bottom:8px;cursor:grab;background:#160b31;border:1px solid #3d246f}.cxp-progress{height:7px;background:#0d0720;border-radius:99px;overflow:hidden}.cxp-progress>div{height:100%;background:linear-gradient(90deg,#7c3aed,#c084fc)}
+.cxp-toast{position:fixed;z-index:1100;left:50%;bottom:20px;transform:translateX(-50%);background:#1a0d3a;border:1px solid #7c3aed;border-radius:12px;padding:12px 14px;color:#e2d0ff;display:flex;gap:14px;align-items:center;box-shadow:0 20px 60px #000;font:12px 'Lato',sans-serif}.cxp-command{position:fixed;z-index:1200;left:50%;top:12%;transform:translateX(-50%);width:min(720px,calc(100vw - 24px));background:#100722;border:1px solid #6d28d9;border-radius:16px;box-shadow:0 35px 100px #000;overflow:hidden}.cxp-command-row{padding:11px 14px;border-top:1px solid #211042;cursor:pointer;display:flex;align-items:center;gap:10px}.cxp-command-row:hover{background:#211042}
+@media(max-width:900px){.cxp-shell{padding:12px 8px 30px}.cxp-grid-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.cxp-calendar{gap:2px}.cxp-day{min-height:72px;padding:4px}.cxp-daypost{font-size:0;height:8px;padding:0}.cxp-kanban{grid-template-columns:repeat(6,220px)}.cxp-drawer{padding:14px}.hide-mobile{display:none!important}}
 `;
-function ArquivoPreview({ url }: { url: string }) {
-  const [open, setOpen] = useState(false);
-  const [slide, setSlide] = useState(0);
-  const links = parseLinks(url);
-  if (links.length === 0) return null;
 
-  const previewUrl = drivePreviewUrl(links[slide]);
-  const thumb = driveThumbnailUrl(links[0]);
+const inputStyle: CSSProperties = { width: "100%", background: "#0d0720", color: "#e2d0ff", border: "1px solid #3d246f", borderRadius: 8, padding: "8px 9px", outline: "none", fontFamily: "'Lato',sans-serif", fontSize: 13 };
 
-  return (
-    <>
-      <div
-        onClick={() => setOpen(true)}
-        style={{ cursor: "pointer", marginTop: 6, borderRadius: 8, overflow: "hidden", border: "1px solid #4a2a8a", position: "relative", background: "#0d0720" }}
-      >
-        {thumb ? (
-          <img src={thumb} alt="preview" style={{ width: "100%", maxHeight: 120, objectFit: "cover", display: "block" }} />
-        ) : (
-          <div style={{ padding: "12px", fontFamily: "'Cinzel',serif", fontSize: 11, color: "#7c3aed", textAlign: "center" }}>
-            🔗 {links.length} arquivo{links.length > 1 ? "s" : ""}
-          </div>
-        )}
-        {links.length > 1 && (
-          <div style={{ position: "absolute", bottom: 6, right: 6, background: "#7c3aed", color: "#fff", borderRadius: 20, padding: "2px 8px", fontSize: 10, fontFamily: "'Cinzel',serif" }}>
-            1/{links.length}
-          </div>
-        )}
-        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.2s" }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
-          onMouseLeave={e => (e.currentTarget.style.opacity = "0")}>
-          <span style={{ color: "#fff", fontFamily: "'Cinzel',serif", fontSize: 12 }}>▶ Visualizar</span>
-        </div>
-      </div>
-
-      {open && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "8px", overflowY: "auto" }}
-          onClick={() => { setOpen(false); setSlide(0); }}
-        >
-          <div
-            style={{ width: "100%", maxWidth: 900, background: "#0d0720", borderRadius: 16, overflow: "hidden", border: "1px solid #4a2a8a" }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #2d1b69", flexWrap: "wrap", gap: 6 }}>
-              <span style={{ fontFamily: "'Cinzel',serif", fontSize: 12, color: "#c084fc" }}>📎 Preview</span>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <a href={links[slide]} target="_blank" rel="noreferrer"
-                  style={{ background: "#1a0d3a", border: "1px solid #4a2a8a", borderRadius: 6, color: "#c9a0f5", fontSize: 11, padding: "5px 10px", fontFamily: "'Cinzel',serif", textDecoration: "none" }}>
-                  Drive ↗
-                </a>
-                <button onClick={() => { setOpen(false); setSlide(0); }}
-                  style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: "#5a3a8a", cursor: "pointer", padding: "5px 10px", fontFamily: "'Cinzel',serif", fontSize: 12 }}>✕</button>
-              </div>
-            </div>
-
-            {/* Navegação */}
-            {links.length > 1 && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#0d0720", borderBottom: "1px solid #2d1b69" }}>
-                <button
-                  onClick={() => setSlide(s => Math.max(0, s - 1))}
-                  disabled={slide === 0}
-                  style={{ background: slide === 0 ? "#1a0d3a" : "#4a2a8a", border: "none", borderRadius: 8, color: slide === 0 ? "#3d1b69" : "#fff", cursor: slide === 0 ? "default" : "pointer", padding: "8px 20px", fontFamily: "'Cinzel',serif", fontSize: 16, fontWeight: 700 }}>
-                  ‹ Anterior
-                </button>
-                <span style={{ fontFamily: "'Cinzel',serif", fontSize: 12, color: "#c084fc" }}>{slide + 1} / {links.length}</span>
-                <button
-                  onClick={() => setSlide(s => Math.min(links.length - 1, s + 1))}
-                  disabled={slide === links.length - 1}
-                  style={{ background: slide === links.length - 1 ? "#1a0d3a" : "#4a2a8a", border: "none", borderRadius: 8, color: slide === links.length - 1 ? "#3d1b69" : "#fff", cursor: slide === links.length - 1 ? "default" : "pointer", padding: "8px 20px", fontFamily: "'Cinzel',serif", fontSize: 16, fontWeight: 700 }}>
-                  Próximo ›
-                </button>
-              </div>
-            )}
-
-            {/* iframe */}
-            <iframe src={previewUrl!} style={{ width: "100%", height: "65vh", border: "none", display: "block" }} allow="autoplay" />
-          </div>
-        </div>
-      )}
-    </>
-  );
+function StatusBadge({ status }: { status: Status }) {
+  const c = STATUS_COLORS[status];
+  return <span style={{ display:"inline-flex", padding:"4px 8px", borderRadius:999, background:c.bg, color:c.text, border:`1px solid ${c.border}`, font:"700 9px 'Cinzel',serif", whiteSpace:"nowrap" }}>{status}</span>;
+}
+function Spinner() { return <div style={{ width:30,height:30,border:"3px solid #3d246f",borderTopColor:"#c084fc",borderRadius:"50%",animation:"spin .8s linear infinite" }} />; }
+function SectionTitle({ eyebrow, children, right }: { eyebrow?: string; children: ReactNode; right?: ReactNode }) {
+  return <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:12,marginBottom:14,flexWrap:"wrap" }}><div>{eyebrow && <div className="cxp-label">{eyebrow}</div>}<div className="cxp-title" style={{ fontSize:18,color:"#e9d5ff" }}>{children}</div></div>{right}</div>;
 }
 
-// ─── EditableCell ──────────────────────────────────────────────────────────
-function EditableCell({ value, onChange, type = "text", options, placeholder, wide, urgency }: {
-  value: string; onChange: (v: string) => void;
-  type?: "text" | "select" | "select-simple";
-  options?: readonly string[]; placeholder?: string; wide?: boolean; urgency?: Urgency;
+// ─── Central de Hoje ───────────────────────────────────────────────────────
+function TodayCenter({ rows, leads, loading, onOpenPost, onGoContent, onGoLeads }: {
+  rows: Row[]; leads: Lead[]; loading: boolean; onOpenPost: (r: Row) => void; onGoContent: () => void; onGoLeads: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
+  const today = todayISO(), tomorrow = tomorrowISO();
+  const todayRows = rows.filter(r => dateInputValue(r) === today && !isDone(r.status));
+  const late = rows.filter(isOverdue).sort((a,b) => dateInputValue(a).localeCompare(dateInputValue(b)));
+  const tomorrowRows = rows.filter(r => dateInputValue(r) === tomorrow && !isDone(r.status));
+  const backlog = rows.filter(r => !dateInputValue(r) && !isDone(r.status));
+  const newLeads = leads.filter(l => l.status === "Novo lead");
+  const production = rows.filter(r => ["Roteiro","Produção","Edição"].includes(r.status));
 
-  if (type === "select") {
-    const c = STATUS_COLORS[value as Status] ?? { bg: "#2d1b69", text: "#c9a0f5", border: "#6b3fa0" };
-    return (
-      <select value={value} onChange={e => onChange(e.target.value)}
-        style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: 6, padding: "6px 8px", fontSize: 13, fontFamily: "'Cinzel', serif", fontWeight: 700, cursor: "pointer", width: "100%", outline: "none" }}>
-        {options!.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    );
-  }
-  if (type === "select-simple") {
-    return (
-      <select value={value} onChange={e => onChange(e.target.value)}
-        style={{ background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 6, padding: "6px", fontSize: 13, fontFamily: "'Cinzel', serif", cursor: "pointer", width: "100%", outline: "none" }}>
-        <option value="">--</option>
-        {options!.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    );
-  }
+  const group = (title: string, items: Row[], empty: string) => <div className="cxp-card" style={{ padding:14 }}>
+    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}><div className="cxp-title" style={{ fontSize:12,color:"#c084fc" }}>{title}</div><span className="cxp-chip">{items.length}</span></div>
+    {items.length === 0 ? <div className="cxp-muted" style={{ fontSize:12,padding:"12px 0" }}>{empty}</div> : items.slice(0,6).map(r => <button key={r.id} onClick={() => onOpenPost(r)} style={{ width:"100%",background:"transparent",border:"none",borderTop:"1px solid #211042",padding:"9px 0",cursor:"pointer",textAlign:"left",color:"inherit" }}>
+      <div style={{ display:"flex",gap:8,alignItems:"center" }}><span>{REDE_ICONS[r.rede] || "📄"}</span><div style={{ flex:1,minWidth:0 }}><div style={{ fontSize:12,color:"#e2d0ff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.tema || r.postagem}</div><div className="cxp-muted" style={{ fontSize:10 }}>{r.data || "Sem data"} · {r.formato || "sem formato"}</div></div><StatusBadge status={r.status}/></div>
+    </button>)}
+  </div>;
 
-  const us = urgency ? URGENCY_STYLES[urgency] : null;
-  return editing ? (
-    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)} onBlur={() => setEditing(false)} placeholder={placeholder}
-      style={{ width: "100%", minHeight: wide ? 60 : 36, background: "#1a0d3a", color: "#e2d0ff", border: "1px solid #7c3aed", borderRadius: 6, padding: "6px 8px", fontSize: 13, fontFamily: "'Lato', sans-serif", resize: "vertical", outline: "none", boxSizing: "border-box" }} />
-  ) : (
-    <div onClick={() => setEditing(true)}
-    style={{ minHeight: 32, padding: "6px", color: value ? "#e2d0ff" : "#5a3a8a", fontSize: 13, fontFamily: "'Lato', sans-serif", cursor: "text", borderRadius: 4, whiteSpace: "normal", overflow: "hidden", wordBreak: "break-word" }}      onMouseEnter={e => (e.currentTarget.style.background = "#2d1b69")}
-      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-      {value || <span style={{ fontStyle: "italic", opacity: 0.4 }}>{placeholder ?? "—"}</span>}
-      {us && <span style={{ display: "inline-block", marginLeft: 6, background: us.badgeBg, color: us.badgeColor, fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel', serif", borderRadius: 4, padding: "1px 5px", letterSpacing: 1, animation: us.anim, verticalAlign: "middle" }}>{us.badge}</span>}
+  if (loading) return <div style={{ padding:60,display:"flex",justifyContent:"center" }}><Spinner/></div>;
+  return <div>
+    <SectionTitle eyebrow="Visão operacional">Central de Hoje</SectionTitle>
+    <div className="cxp-grid-kpis" style={{ marginBottom:14 }}>
+      {[
+        ["Hoje",todayRows.length,"#fca5a5"],["Atrasados",late.length,"#fb7185"],["Amanhã",tomorrowRows.length,"#fcd34d"],["Novos leads",newLeads.length,"#c084fc"]
+      ].map(([label,val,color]) => <div key={String(label)} className="cxp-card cxp-kpi"><div className="cxp-label">{label}</div><strong style={{ color:String(color) }}>{val}</strong></div>)}
     </div>
-  );
+    <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:12 }}>
+      {group("🔥 Precisa acontecer hoje", todayRows, "Nada pendente para hoje.")}
+      {group("⏰ Atrasados", late, "Nenhum conteúdo atrasado. Um raro momento civilizatório.")}
+      {group("🌤 Amanhã", tomorrowRows, "Nada marcado para amanhã.")}
+      {group("⚙ Em produção", production, "Nenhum conteúdo em produção agora.")}
+      {group("💡 Banco de ideias", backlog, "O backlog está vazio.")}
+      <div className="cxp-card" style={{ padding:14 }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}><div className="cxp-title" style={{ fontSize:12,color:"#c084fc" }}>👥 Leads novos</div><span className="cxp-chip">{newLeads.length}</span></div>
+        {newLeads.slice(0,6).map(l => <div key={l.id} style={{ borderTop:"1px solid #211042",padding:"9px 0" }}><div style={{ fontSize:12 }}>{l.nome || "Sem nome"}</div><div className="cxp-muted" style={{ fontSize:10 }}>{l.whatsapp_discord || "sem contato"} · {l.origem || l.utm_source || "origem não informada"}</div></div>)}
+        {newLeads.length === 0 && <div className="cxp-muted" style={{ fontSize:12,padding:"12px 0" }}>Nenhum lead novo.</div>}
+      </div>
+    </div>
+    <div style={{ display:"flex",gap:8,marginTop:14,flexWrap:"wrap" }}><button className="cxp-btn primary" onClick={onGoContent}>Abrir conteúdo</button><button className="cxp-btn" onClick={onGoLeads}>Abrir CRM</button></div>
+  </div>;
 }
 
-// ─── CalendarView ──────────────────────────────────────────────────────────
-function CalendarView({ rows, mes, onSelectDay, isMobile, onMovePost }: {
-  rows: Row[];
-  mes: number;
-  onSelectDay: (rows: Row[], day: number) => void;
-  isMobile: boolean;
-  onMovePost: (rowId: string, newDateStr: string) => void;
+// ─── Calendário ────────────────────────────────────────────────────────────
+function CalendarBoard({ rows, mes, scope, weekIndex, onWeekIndex, onMovePost, onOpen, onCreateForDay }: {
+  rows: Row[]; mes: number; scope: CalendarScope; weekIndex: number; onWeekIndex: (n:number)=>void;
+  onMovePost:(id:string,dateISO:string)=>void; onOpen:(r:Row)=>void; onCreateForDay:(dateISO:string)=>void;
 }) {
   const year = new Date().getFullYear();
   const firstDay = new Date(year, mes, 1).getDay();
-  const daysInMonth = new Date(year, mes + 1, 0).getDate();
-  const today = new Date();
-  const todayDay = (today.getMonth() === mes && today.getFullYear() === year) ? today.getDate() : -1;
-
-  const [dragOverDay, setDragOverDay] = useState<number | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-
-  const byDay: Record<number, Row[]> = {};
-  rows.forEach(r => {
-    const d = parseDateBR(r.data);
-    if (d && d.getMonth() === mes && d.getFullYear() === year) {
-      const day = d.getDate();
-      if (!byDay[day]) byDay[day] = [];
-      byDay[day].push(r);
-    }
-  });
-
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < firstDay; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  const pad = (n: number) => String(n).padStart(2, "0");
-
-  return (
-    <div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMobile ? 2 : 4, marginBottom: 4 }}>
-        {WEEKDAYS.map(w => (
-          <div key={w} style={{ textAlign: "center", padding: "6px 0", fontFamily: "'Cinzel', serif", fontSize: isMobile ? 8 : 10, color: "#7c3aed", fontWeight: 700 }}>{w}</div>
-        ))}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMobile ? 2 : 4 }}>
-        {cells.map((day, idx) => {
-          if (day === null) return <div key={`e-${idx}`} style={{ minHeight: isMobile ? 54 : 80 }} />;
-          const dayRows = byDay[day] ?? [];
-          const isToday = day === todayDay;
-          const isDragOver = dragOverDay === day;
-          const hasUrgent = dayRows.some(r => { const u = getUrgency(r.data, r.status); return u === "hoje" || u === "amanha"; });
-
-          return (
-            <div
-              key={day}
-              onDragOver={e => { e.preventDefault(); setDragOverDay(day); }}
-              onDragLeave={() => setDragOverDay(null)}
-              onDrop={e => {
-                e.preventDefault();
-                const id = e.dataTransfer.getData("rowId");
-                if (id) {
-                  const newDate = `${pad(day)}/${pad(mes + 1)}/${year}`;
-                  onMovePost(id, newDate);
-                }
-                setDragOverDay(null);
-              }}
-              onClick={() => dayRows.length > 0 && onSelectDay(dayRows, day)}
-              style={{
-                minHeight: isMobile ? 54 : 80,
-                background: isDragOver
-                  ? "linear-gradient(135deg,#4a2a8a55,#7c3aed44)"
-                  : isToday
-                    ? "linear-gradient(135deg,#3d1b8a55,#7c3aed33)"
-                    : "#110828",
-                border: isDragOver
-                  ? "2px dashed #c084fc"
-                  : isToday
-                    ? "2px solid #7c3aed"
-                    : hasUrgent
-                      ? "1px solid #ef4444"
-                      : "1px solid #2d1b69",
-                borderRadius: isMobile ? 5 : 8,
-                padding: isMobile ? "4px 3px" : "6px",
-                cursor: dayRows.length > 0 ? "pointer" : "default",
-                position: "relative",
-                overflow: "hidden",
-                transition: "border 0.15s, background 0.15s",
-              }}
-            >
-              {hasUrgent && (
-                <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "pulse-red 1s ease-in-out infinite", display: "block" }} />
-              )}
-              <div style={{ fontFamily: "'Cinzel', serif", fontSize: isToday ? (isMobile ? 12 : 13) : (isMobile ? 10 : 11), fontWeight: isToday ? 900 : 400, color: isToday ? "#c084fc" : "#5a3a8a", marginBottom: 2 }}>{day}</div>
-
-              {!isMobile && dayRows.slice(0, 3).map(r => {
-                const sc = STATUS_COLORS[r.status];
-                return (
-                  <div
-                    key={r.id}
-                    draggable
-                    onDragStart={e => {
-                      e.dataTransfer.setData("rowId", r.id);
-                      e.stopPropagation();
-                      setDraggingId(r.id);
-                    }}
-                    onDragEnd={() => setDraggingId(null)}
-                    style={{
-                      background: sc.calBg,
-                      border: `1px solid ${sc.border}`,
-                      borderRadius: 4,
-                      padding: "2px 4px",
-                      marginBottom: 2,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 3,
-                      cursor: "grab",
-                      opacity: draggingId === r.id ? 0.4 : 1,
-                      transition: "opacity 0.15s",
-                      userSelect: "none",
-                    }}
-                    onClick={e => e.stopPropagation()}
-                  >
-                    <span style={{ fontSize: 8 }}>{REDE_ICONS[r.rede] || "📄"}</span>
-                    <span style={{ fontSize: 9, color: sc.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.tema || r.postagem}</span>
-                  </div>
-                );
-              })}
-
-              {!isMobile && dayRows.length > 3 && (
-                <div style={{ fontSize: 9, color: "#7c3aed", textAlign: "center" }}>+{dayRows.length - 3}</div>
-              )}
-
-              {isMobile && dayRows.length > 0 && (
-                <div style={{ display: "flex", gap: 1, flexWrap: "wrap", marginTop: 2 }}>
-                  {dayRows.slice(0, 3).map(r => (
-                    <div
-                      key={r.id}
-                      draggable
-                      onDragStart={e => { e.dataTransfer.setData("rowId", r.id); setDraggingId(r.id); }}
-                      onDragEnd={() => setDraggingId(null)}
-                      style={{ width: 6, height: 6, borderRadius: "50%", background: STATUS_COLORS[r.status].border, cursor: "grab", opacity: draggingId === r.id ? 0.4 : 1 }}
-                    />
-                  ))}
-                  {dayRows.length > 3 && <span style={{ fontSize: 7, color: "#7c3aed" }}>+{dayRows.length - 3}</span>}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+  const daysInMonth = new Date(year, mes+1, 0).getDate();
+  const cells:(number|null)[] = [...Array(firstDay).fill(null), ...Array.from({length:daysInMonth},(_,i)=>i+1)];
+  while (cells.length % 7) cells.push(null);
+  const maxWeek = Math.max(0, cells.length/7 - 1);
+  const currentWeek = Math.min(weekIndex, maxWeek);
+  const visible = scope === "semana" ? cells.slice(currentWeek*7,currentWeek*7+7) : cells;
+  const [dragOverDay,setDragOverDay] = useState<number|null>(null);
+  const byDay:Record<number,Row[]> = {};
+  rows.forEach(r => { const d = dateInputValue(r); if (d && Number(d.slice(5,7))-1===mes && Number(d.slice(0,4))===year) { const day=Number(d.slice(8,10)); (byDay[day] ||= []).push(r); } });
+  const now = new Date(); const todayDay = now.getMonth()===mes && now.getFullYear()===year ? now.getDate() : -1;
+  return <div>
+    {scope === "semana" && <div style={{ display:"flex",justifyContent:"flex-end",gap:6,marginBottom:8 }}><button className="cxp-btn" disabled={currentWeek===0} onClick={()=>onWeekIndex(Math.max(0,currentWeek-1))}>‹ Semana</button><button className="cxp-btn" disabled={currentWeek===maxWeek} onClick={()=>onWeekIndex(Math.min(maxWeek,currentWeek+1))}>Semana ›</button></div>}
+    <div className="cxp-calendar" style={{ marginBottom:4 }}>{WEEKDAYS.map(w => <div key={w} style={{ textAlign:"center",font:"700 9px 'Cinzel',serif",color:"#7656a8",padding:5 }}>{w}</div>)}</div>
+    <div className="cxp-calendar">{visible.map((day,idx) => {
+      if (!day) return <div key={`e-${idx}`} className="cxp-day empty"/>;
+      const items=(byDay[day]||[]).sort((a,b)=>FLOW_STATUS.indexOf(a.status)-FLOW_STATUS.indexOf(b.status));
+      const iso=`${year}-${pad(mes+1)}-${pad(day)}`;
+      return <div key={day} className={`cxp-day ${day===todayDay?"today":""} ${dragOverDay===day?"drop":""}`}
+        onDragOver={e=>{e.preventDefault();setDragOverDay(day)}} onDragLeave={()=>setDragOverDay(null)} onDrop={e=>{e.preventDefault();const id=e.dataTransfer.getData("rowId");if(id)onMovePost(id,iso);setDragOverDay(null)}}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}><span style={{ font:"700 10px 'Cinzel',serif",color:day===todayDay?"#c084fc":"#6f5a95" }}>{day}</span><button onClick={()=>onCreateForDay(iso)} title="Criar conteúdo neste dia" style={{ background:"none",border:"none",color:"#6f5a95",cursor:"pointer",fontSize:14 }}>＋</button></div>
+        {items.slice(0,5).map(r=>{const c=STATUS_COLORS[r.status];return <div key={r.id} draggable onDragStart={e=>e.dataTransfer.setData("rowId",r.id)} onClick={()=>onOpen(r)} className="cxp-daypost" title={`${r.tema||r.postagem} · ${r.formato}`} style={{ background:c.calBg,border:`1px solid ${c.border}`,color:c.text }}>{REDE_ICONS[r.rede]||"📄"} {r.formato===EXTRA_TIKTOK_FORMAT?"Extra TikTok":r.tema||r.postagem}</div>})}
+        {items.length>5&&<div className="cxp-muted" style={{fontSize:9,textAlign:"center",marginTop:3}}>+{items.length-5}</div>}
+        {items.length>0&&<div style={{display:"flex",gap:2,marginTop:5,flexWrap:"wrap"}}>{Array.from(new Set(items.map(i=>i.formato))).slice(0,4).map(f=><span key={f} title={f} style={{width:5,height:5,borderRadius:"50%",background:f.includes("Reels")||f.includes("TikTok")?"#e879f9":f==="Carrossel"?"#818cf8":"#7c3aed"}}/>)}</div>}
+      </div>;
+    })}</div>
+  </div>;
 }
 
-// ─── DayPanel ──────────────────────────────────────────────────────────────
-function DayPanel({ day, mes, rows, onClose, isMobile }: { day: number; mes: number; rows: Row[]; onClose: () => void; isMobile: boolean }) {
-  return (
-    <div style={{ marginTop: 16, background: "linear-gradient(135deg,#1a0d3a,#2d1b69)", border: "1px solid #4a2a8a", borderRadius: 14, padding: isMobile ? "14px 12px" : "18px 20px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div style={{ fontFamily: "'Cinzel', serif", fontSize: isMobile ? 12 : 14, fontWeight: 700, color: "#c084fc" }}>
-          📅 {day} de {MONTHS[mes]} — {rows.length} postagem{rows.length !== 1 ? "s" : ""}
-        </div>
-        <button onClick={onClose} style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: "#5a3a8a", cursor: "pointer", padding: "6px 12px", fontFamily: "'Cinzel', serif", fontSize: 12 }}>✕</button>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {rows.map(r => {
-          const sc = STATUS_COLORS[r.status];
-          const urgency = getUrgency(r.data, r.status);
-          const us = urgency ? URGENCY_STYLES[urgency] : null;
-          return (
-            <div key={r.id} style={{ background: sc.rowBg, border: `1px solid ${us ? us.border : sc.border}`, borderLeft: `4px solid ${us ? us.border : sc.border}`, borderRadius: 8, padding: "10px 14px", display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: "8px 16px" }}>
-              <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>POSTAGEM</div><div style={{ fontSize: 12, color: "#e2d0ff" }}>{r.postagem}</div></div>
-              <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>TEMA</div><div style={{ fontSize: 12, color: "#e2d0ff" }}>{r.tema || "—"}</div></div>
-              <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>REDE</div><div style={{ fontSize: 12, color: "#e2d0ff" }}>{REDE_ICONS[r.rede] || ""} {r.rede || "—"}</div></div>
-              <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>FORMATO</div><div style={{ fontSize: 12, color: "#e2d0ff" }}>{r.formato || "—"}</div></div>
-              <div><div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>RESPONSÁVEL</div><div style={{ fontSize: 12, color: "#e2d0ff" }}>{r.responsavel || "—"}</div></div>
-              <div>
-                <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>STATUS</div>
-                <span style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.border}`, borderRadius: 5, padding: "2px 7px", fontSize: 10, fontFamily: "'Cinzel', serif", fontWeight: 700 }}>{r.status}</span>
-                {us && <span style={{ marginLeft: 6, background: us.badgeBg, color: us.badgeColor, fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel', serif", borderRadius: 4, padding: "1px 5px", animation: us.anim }}>{us.badge}</span>}
-              </div>
-              {r.link_arquivo && (
-  <div style={{ gridColumn: "1 / -1" }}>
-    <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 2 }}>ARQUIVO</div>
-    <ArquivoPreview url={r.link_arquivo} />
-  </div>
-)}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+function Backlog({ rows, onOpen, onAdd }: { rows:Row[]; onOpen:(r:Row)=>void; onAdd:()=>void }) {
+  const backlog=rows.filter(r=>!dateInputValue(r)&&!isDone(r.status));
+  return <div className="cxp-card" style={{ padding:10,minWidth:230 }}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div className="cxp-title" style={{fontSize:11,color:"#c084fc"}}>💡 Banco de Ideias</div><button className="cxp-btn" onClick={onAdd}>＋</button></div><div className="cxp-muted" style={{fontSize:10,marginBottom:8}}>Arraste uma ideia para um dia do calendário.</div>{backlog.length===0&&<div className="cxp-muted" style={{fontSize:11,padding:12,textAlign:"center"}}>Sem ideias soltas.</div>}{backlog.map(r=><div key={r.id} draggable onDragStart={e=>e.dataTransfer.setData("rowId",r.id)} onClick={()=>onOpen(r)} className="cxp-kanban-card" style={{cursor:"grab"}}><div style={{fontSize:11,color:"#e2d0ff"}}>{r.tema||r.postagem}</div><div className="cxp-muted" style={{fontSize:9,marginTop:4}}>{REDE_ICONS[r.rede]||"📄"} {r.formato||"sem formato"}</div></div>)}</div>;
 }
 
-// ─── LeadsView ─────────────────────────────────────────────────────────────
-const LEAD_STATUS_OPTIONS = ["Novo lead","Em contato","Mesa alocada","Desistiu","Lista de espera","Não respondeu","Número errado","Menor de 18 anos 🍼"];
-const LEAD_STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  "Novo lead":      { bg: "#3d2068", text: "#c9a0f5", border: "#6b3fa0" },
-  "Em contato":     { bg: "#2a1a5e", text: "#93c5fd", border: "#3b5bdb" },
-  "Mesa alocada":   { bg: "#1a3a1a", text: "#86efac", border: "#16a34a" },
-  "Desistiu":       { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626" },
-  "Lista de espera":{ bg: "#1e3a5f", text: "#6ee7b7", border: "#059669" },
-  "Não respondeu":  { bg: "#2a2a2a", text: "#9ca3af", border: "#4b5563" },
-  "Número errado":  { bg: "#3a2a1a", text: "#fbbf24", border: "#b45309" },
-  "Menor de 18 anos 🍼": { bg: "#3a1a2e", text: "#f9a8d4", border: "#be185d" },
-};
-
-const LEAD_CHANNELS = [
-  { label: "Meta Ads", icon: "/icons/facebook.png", chaves: ["meta", "facebook"] },
-  { label: "Instagram", icon: "/icons/instagram.png", chaves: ["instagram"] },
-  { label: "TikTok", icon: "/icons/tiktok.png", chaves: ["tiktok"] },
-  { label: "Mayoou", icon: mayoouImg, chaves: ["mayoou"] },
-  { label: "Zonad20", icon: zonad20Img, chaves: ["zonad20", "zonad"] },
-];
-
-function LeadsView({ isMobile }: { isMobile: boolean }) {
-  const [leads, setLeads]         = useState<Lead[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [search, setSearch]       = useState("");
-  const [filterStatus, setFilterStatus] = useState("Todos");
-  const [expanded, setExpanded]   = useState<string | null>(null);
-  const [expandedChannel, setExpandedChannel] = useState<string | null>(null);
-
-  useEffect(() => {
-    dbLoadLeads().then(setLeads).catch(console.error).finally(() => setLoading(false));
-  }, []);
-
-  const updateStatus = async (id: string, status: string) => {
-    setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l));
-    await dbUpdateLeadStatus(id, status).catch(console.error);
-  };
-
-  const filtered = leads.filter(l => {
-    if (filterStatus !== "Todos" && l.status !== filterStatus) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return l.nome?.toLowerCase().includes(q) || l.whatsapp_discord?.toLowerCase().includes(q) || l.sistemas_desejados?.toLowerCase().includes(q);
-    }
-    return true;
-  });
-
-  const byStatus = LEAD_STATUS_OPTIONS.reduce((acc, s) => {
-    acc[s] = leads.filter(l => l.status === s).length;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const selectStyle: React.CSSProperties = { background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 8, padding: "8px 10px", fontFamily: "'Cinzel', serif", fontSize: 12, cursor: "pointer", outline: "none" };
-
-  return (
-    <div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-
-{/* Cards de status */}
-<div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(6,1fr)", gap: 8 }}>
-  {LEAD_STATUS_OPTIONS.map(s => {
-    const c = LEAD_STATUS_COLORS[s];
-    return (
-      <div key={s} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center", cursor: "pointer" }} onClick={() => setFilterStatus(filterStatus === s ? "Todos" : s)}>
-        <div style={{ fontSize: 20, fontWeight: 900, color: c.text, fontFamily: "'Cinzel', serif" }}>{byStatus[s] ?? 0}</div>
-        <div style={{ fontSize: 8, color: c.text, opacity: 0.8, fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>{s}</div>
-      </div>
-    );
-  })}
-</div>
-
-{/* Cards de origem */}
-<div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(3,1fr)", gap: 8 }}>
-  {LEAD_CHANNELS.map(canal => {
-    const canalLeads = leads.filter(l => {
-      const origem = (l.notas ?? "").toLowerCase();
-      return canal.chaves.some(k => origem.includes(k));
-    });
-    const count = canalLeads.length;
-    const isOpen = expandedChannel === canal.label;
-    return (
-      <div key={canal.label}
-        onClick={() => setExpandedChannel(isOpen ? null : canal.label)}
-        style={{ background: "#110828", border: `1px solid ${isOpen ? "#7c3aed" : "#2d1b69"}`, borderRadius: 10, padding: "10px 8px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}>
-        <img src={canal.icon} alt={canal.label} style={{ width: 40, height: 40, objectFit: "contain" }} />
-        <div style={{ fontSize: 20, fontWeight: 900, color: "#e2d0ff", fontFamily: "'Cinzel', serif" }}>{count}</div>
-        <div style={{ fontSize: 8, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>{canal.label}</div>
-      </div>
-    );
-  })}
-</div>
-
-{/* Breakdown por status do canal selecionado */}
-{expandedChannel && (() => {
-  const canal = LEAD_CHANNELS.find(c => c.label === expandedChannel)!;
-  const canalLeads = leads.filter(l => {
-    const origem = (l.notas ?? "").toLowerCase();
-    return canal.chaves.some(k => origem.includes(k));
-  });
-  return (
-    <div style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: "1px solid #7c3aed", borderRadius: 10, padding: "12px 14px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <img src={canal.icon} alt={canal.label} style={{ width: 20, height: 20, objectFit: "contain" }} />
-        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: "#e2d0ff", letterSpacing: 0.5 }}>{canal.label} · {canalLeads.length} lead{canalLeads.length !== 1 ? "s" : ""} por status</div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(4,1fr)", gap: 8 }}>
-        {LEAD_STATUS_OPTIONS.map(s => {
-          const c = LEAD_STATUS_COLORS[s];
-          const n = canalLeads.filter(l => l.status === s).length;
-          return (
-            <div key={s} onClick={() => setFilterStatus(filterStatus === s ? "Todos" : s)}
-              style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 8, padding: "8px 6px", textAlign: "center", cursor: "pointer", opacity: n === 0 ? 0.4 : 1 }}>
-              <div style={{ fontSize: 16, fontWeight: 900, color: c.text, fontFamily: "'Cinzel', serif" }}>{n}</div>
-              <div style={{ fontSize: 7, color: c.text, opacity: 0.85, fontFamily: "'Cinzel', serif", letterSpacing: 0.4 }}>{s}</div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-})()}
-
-</div>
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Buscar por nome, contato ou sistema..."
-          style={{ ...selectStyle, flex: 1, minWidth: 200 }} />
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
-          <option value="Todos">Todos os status</option>
-          {LEAD_STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-        </select>
-        <button onClick={() => { setLoading(true); dbLoadLeads().then(setLeads).finally(() => setLoading(false)); }}
-          style={{ background: "#1a0d3a", color: "#c084fc", border: "1px solid #4a2a8a", borderRadius: 8, padding: "8px 14px", fontFamily: "'Cinzel', serif", fontSize: 12, cursor: "pointer" }}>⟳</button>
-      </div>
-
-      {loading && <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-
-      {!loading && filtered.length === 0 && (
-        <div style={{ textAlign: "center", padding: 40, color: "#5a3a8a", fontFamily: "'Cinzel', serif", fontSize: 13 }}>Nenhum lead encontrado.</div>
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {filtered.map(lead => {
-          const sc = LEAD_STATUS_COLORS[lead.status] ?? LEAD_STATUS_COLORS["Novo lead"];
-          const isOpen = expanded === lead.id;
-          const date = lead.created_at ? new Date(lead.created_at).toLocaleDateString("pt-BR") : "—";
-          const origem = lead.notas?.replace("Origem: ", "") ?? "—";
-          return (
-            <div key={lead.id} style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: `1px solid ${sc.border}`, borderLeft: `4px solid ${sc.border}`, borderRadius: 12, overflow: "hidden" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", cursor: "pointer" }} onClick={() => setExpanded(isOpen ? null : lead.id)}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 700, color: "#e2d0ff", marginBottom: 2 }}>{lead.nome || "—"}</div>
-                  <div style={{  display: "flex", alignItems: "center", gap: 8 }}>
-  <span style={{ fontFamily: "'Lato', sans-serif", fontSize: 11, color: "#7c3aed" }}>{lead.whatsapp_discord || "—"} · {date}</span>
-  {lead.whatsapp_discord && (
-    <>
-      <button
-        onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(lead.whatsapp_discord); }}
-        title="Copiar número"
-        style={{ background: "none", border: "1px solid #4a2a8a", borderRadius: 6, color: "#7c3aed", cursor: "pointer", fontSize: 11, padding: "2px 7px" }}>
-        📋
-      </button>
-      
-      <a href={`https://wa.me/55${lead.whatsapp_discord.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ background: "none", border: "1px solid #16a34a", borderRadius: 6, color: "#86efac", cursor: "pointer", fontSize: 11, padding: "2px 7px", textDecoration: "none" }}>💬</a>
-    </>
-  )}
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                  <select value={lead.status} onChange={e => { e.stopPropagation(); updateStatus(lead.id, e.target.value); }}
-                    onClick={e => e.stopPropagation()}
-                    style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.border}`, borderRadius: 6, padding: "5px 8px", fontSize: 11, fontFamily: "'Cinzel', serif", fontWeight: 700, cursor: "pointer", outline: "none" }}>
-                    {LEAD_STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-                  </select>
-                  <span style={{ color: "#5a3a8a", fontSize: 14 }}>{isOpen ? "▲" : "▼"}</span>
-                </div>
-              </div>
-
-              {isOpen && (
-                <div style={{ padding: "0 16px 16px", borderTop: "1px solid #2d1b69", paddingTop: 14 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3,1fr)", gap: "10px 20px" }}>
-                    {[
-                      { label: "Idade",            val: lead.idade },
-                      { label: "Tempo de RPG",     val: lead.tempo_rpg },
-                      { label: "Melhor período",   val: lead.melhor_periodo },
-                      { label: "Melhor dia",       val: lead.melhor_dia },
-                      { label: "Sistemas jogados", val: lead.sistemas_jogados },
-                      { label: "Sistemas desejados", val: lead.sistemas_desejados },
-                      { label: "Pronto pra ingressar", val: lead.pronto_ingressar },
-                      { label: "Código de desconto",   val: lead.codigo_desconto || "—" },
-                      { label: "Origem",               val: origem },
-                    ].map(({ label, val }) => (
-                      <div key={label}>
-                        <div style={{ fontSize: 9, color: "#a78bfa", fontFamily: "'Cinzel', serif", letterSpacing: 1, marginBottom: 2 }}>{label.toUpperCase()}</div>
-                        <div style={{ fontSize: 12, color: "#e2d0ff", fontFamily: "'Lato', sans-serif" }}>{val || "—"}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ marginTop: 24, textAlign: "center", fontSize: 10, color: "#3d1b69", fontFamily: "'Cinzel', serif", letterSpacing: 2 }}>
-        {leads.length} lead{leads.length !== 1 ? "s" : ""} no total
-      </div>
-    </div>
-  );
-}
-// ─── InfluencersView ────────────────────────────────────────────────────────
-function InfluencersView({ isMobile }: { isMobile: boolean }) {
-  const [influencers, setInfluencers] = useState<Influencer[]>([]);
-  const [leads, setLeads]             = useState<Lead[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [nome, setNome]               = useState("");
-  const [codigo, setCodigo]           = useState("");
-  const [codigoEditado, setCodigoEditado] = useState(false);
-  const [salvando, setSalvando]       = useState(false);
-  const [erro, setErro]               = useState("");
-  const [copiado, setCopiado]         = useState<string | null>(null);
-
-  const carregar = () => {
-    setLoading(true);
-    Promise.all([dbLoadInfluencers(), dbLoadLeads()])
-      .then(([infs, lds]) => { setInfluencers(infs); setLeads(lds); })
-      .catch(e => setErro(e.message))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { carregar(); }, []);
-
-  const leadsDoInfluencer = (codigo: string) => leads.filter(l => (l.notas ?? "").toLowerCase().includes(codigo.toLowerCase()));
-
-  const criar = async () => {
-    const codigoFinal = slugifyCodigo(codigo || nome);
-    if (!nome.trim() || !codigoFinal) { setErro("Preencha o nome do influencer."); return; }
-    if (influencers.some(i => i.codigo === codigoFinal)) { setErro("Já existe um influencer com esse código."); return; }
-    setSalvando(true);
-    setErro("");
-    try {
-      await dbCreateInfluencer(nome.trim(), codigoFinal);
-      setNome(""); setCodigo(""); setCodigoEditado(false);
-      carregar();
-    } catch (e) {
-      setErro((e as Error).message);
-    } finally {
-      setSalvando(false);
-    }
-  };
-
-  const alternarAtivo = async (inf: Influencer) => {
-    setInfluencers(prev => prev.map(i => i.id === inf.id ? { ...i, ativo: !i.ativo } : i));
-    await dbUpdateInfluencer(inf.id, { ativo: !inf.ativo }).catch(console.error);
-  };
-
-  const excluir = async (inf: Influencer) => {
-    if (!window.confirm(`Excluir o influencer "${inf.nome}"? Isso não apaga os leads já gerados, só o cadastro do link.`)) return;
-    setInfluencers(prev => prev.filter(i => i.id !== inf.id));
-    await dbDeleteInfluencer(inf.id).catch(console.error);
-  };
-
-  const copiarLink = (codigo: string) => {
-    const link = `${window.location.origin}/?ref=${codigo}`;
-    navigator.clipboard.writeText(link);
-    setCopiado(codigo);
-    setTimeout(() => setCopiado(null), 1500);
-  };
-
-  const inputStyle: React.CSSProperties = { background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 8, padding: "8px 10px", fontFamily: "'Lato', sans-serif", fontSize: 13, outline: "none" };
-
-  const ranking = [...influencers].sort((a, b) => {
-    const leadsA = leadsDoInfluencer(a.codigo).length;
-    const leadsB = leadsDoInfluencer(b.codigo).length;
-    if (leadsB !== leadsA) return leadsB - leadsA;
-    return b.clicks - a.clicks;
-  });
-
-  return (
-    <div>
-      {/* Form de criação */}
-      <div style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: "1px solid #4a2a8a", borderRadius: 12, padding: 16, marginBottom: 20 }}>
-        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#c084fc", letterSpacing: 1, marginBottom: 12 }}>➕ NOVO INFLUENCER</div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div style={{ flex: isMobile ? "1 1 100%" : "1 1 200px" }}>
-            <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 4 }}>NOME</div>
-            <input value={nome} onChange={e => { setNome(e.target.value); if (!codigoEditado) setCodigo(slugifyCodigo(e.target.value)); }}
-              placeholder="Ex: Zonad20" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
-          </div>
-          <div style={{ flex: isMobile ? "1 1 100%" : "0 0 160px" }}>
-            <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel', serif", marginBottom: 4 }}>CÓDIGO DO LINK</div>
-            <input value={codigo} onChange={e => { setCodigo(slugifyCodigo(e.target.value)); setCodigoEditado(true); }}
-              placeholder="zonad20" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
-          </div>
-          <button onClick={criar} disabled={salvando}
-            style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700, cursor: salvando ? "default" : "pointer", opacity: salvando ? 0.6 : 1 }}>
-            {salvando ? "Criando..." : "Criar link"}
-          </button>
-        </div>
-        {erro && <div style={{ color: "#fca5a5", fontSize: 11, marginTop: 8, fontFamily: "'Lato', sans-serif" }}>{erro}</div>}
-      </div>
-
-      {loading && <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-
-      {!loading && ranking.length === 0 && (
-        <div style={{ textAlign: "center", padding: 40, color: "#5a3a8a", fontFamily: "'Cinzel', serif", fontSize: 13 }}>Nenhum influencer cadastrado ainda.</div>
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {ranking.map((inf, idx) => {
-          const leadsInf = leadsDoInfluencer(inf.codigo);
-          const conversao = inf.clicks > 0 ? (leadsInf.length / inf.clicks * 100) : 0;
-          const link = `${window.location.origin}/?ref=${inf.codigo}`;
-          return (
-            <div key={inf.id} style={{ background: "linear-gradient(135deg,#1a0d3a,#110828)", border: `1px solid ${inf.ativo ? "#4a2a8a" : "#3a1a1a"}`, borderLeft: `4px solid ${inf.ativo ? "#7c3aed" : "#5a3a3a"}`, borderRadius: 12, padding: 16, opacity: inf.ativo ? 1 : 0.6 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-                <span style={{ fontFamily: "'Cinzel', serif", fontSize: 16, fontWeight: 900, color: idx === 0 ? "#fbbf24" : "#5a3a8a" }}>
-                  {idx === 0 && leadsInf.length > 0 ? "🏆" : `#${idx + 1}`}
-                </span>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 15, fontWeight: 700, color: "#e2d0ff", flex: 1, minWidth: 120 }}>{inf.nome}</div>
-                <button onClick={() => alternarAtivo(inf)} style={{ background: "none", border: `1px solid ${inf.ativo ? "#16a34a" : "#5a3a3a"}`, color: inf.ativo ? "#86efac" : "#9ca3af", borderRadius: 6, padding: "4px 10px", fontSize: 10, fontFamily: "'Cinzel', serif", cursor: "pointer" }}>
-                  {inf.ativo ? "Ativo" : "Pausado"}
-                </button>
-                <button onClick={() => excluir(inf)} style={{ background: "none", border: "1px solid #4a2a8a", color: "#5a3a8a", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>🗑</button>
-              </div>
-
-              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                <input readOnly value={link} onClick={e => (e.target as HTMLInputElement).select()}
-                  style={{ ...inputStyle, flex: 1, fontSize: 12, minWidth: 0 }} />
-                <button onClick={() => copiarLink(inf.codigo)}
-                  style={{ background: copiado === inf.codigo ? "#16a34a" : "#1a0d3a", color: copiado === inf.codigo ? "#fff" : "#c084fc", border: "1px solid #4a2a8a", borderRadius: 8, padding: "8px 12px", fontSize: 11, fontFamily: "'Cinzel', serif", cursor: "pointer", whiteSpace: "nowrap" }}>
-                  {copiado === inf.codigo ? "Copiado!" : "📋 Copiar"}
-                </button>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(3,1fr)", gap: 8 }}>
-                <div style={{ background: "#0d0720", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: "#93c5fd", fontFamily: "'Cinzel', serif" }}>{inf.clicks}</div>
-                  <div style={{ fontSize: 8, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>CLIQUES</div>
-                </div>
-                <div style={{ background: "#0d0720", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: "#c084fc", fontFamily: "'Cinzel', serif" }}>{leadsInf.length}</div>
-                  <div style={{ fontSize: 8, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>LEADS</div>
-                </div>
-                <div style={{ background: "#0d0720", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: "#86efac", fontFamily: "'Cinzel', serif" }}>{conversao.toFixed(1)}%</div>
-                  <div style={{ fontSize: 8, color: "#5a3a8a", fontFamily: "'Cinzel', serif", letterSpacing: 0.5 }}>CONVERSÃO</div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+// ─── Kanban ────────────────────────────────────────────────────────────────
+function KanbanView({ rows, onOpen, onStatus }: { rows:Row[]; onOpen:(r:Row)=>void; onStatus:(id:string,status:Status)=>void }) {
+  const [over,setOver]=useState<Status|null>(null);
+  return <div className="cxp-kanban">{FLOW_STATUS.map(status=>{const c=STATUS_COLORS[status];const items=rows.filter(r=>r.status===status);return <div key={status} className="cxp-kanban-col" onDragOver={e=>{e.preventDefault();setOver(status)}} onDragLeave={()=>setOver(null)} onDrop={e=>{e.preventDefault();const id=e.dataTransfer.getData("rowId");if(id)onStatus(id,status);setOver(null)}} style={{outline:over===status?`2px dashed ${c.border}`:"none"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><StatusBadge status={status}/><span className="cxp-muted" style={{fontSize:10}}>{items.length}</span></div>{items.map(r=><div key={r.id} draggable onDragStart={e=>e.dataTransfer.setData("rowId",r.id)} onClick={()=>onOpen(r)} className="cxp-kanban-card" style={{borderLeft:`3px solid ${c.border}`}}><div style={{fontSize:12,fontWeight:700,color:"#e2d0ff",marginBottom:4}}>{r.tema||r.postagem}</div><div className="cxp-muted" style={{fontSize:10}}>{r.data||"Backlog"} · {REDE_ICONS[r.rede]||"📄"} {r.formato||"—"}</div>{r.checklist.length>0&&<div style={{marginTop:7}}><div className="cxp-progress"><div style={{width:`${Math.round(r.checklist.filter(i=>i.done).length/r.checklist.length*100)}%`}}/></div></div>}</div>)}</div>})}</div>;
 }
 
-function PostagemCard({ row, idx, onUpdate, onDuplicate, onRemove }: {
-  row: Row; idx: number;
-  onUpdate: (id: string, key: keyof Row, val: string) => void;
-  onDuplicate: (r: Row) => void;
-  onRemove: (id: string) => void;
+// ─── Tabela / ações em massa ──────────────────────────────────────────────
+function ContentTable({ rows, selected, onSelect, onSelectAll, onOpen, onUpdate, onAdapt, onRemove }: {
+  rows:Row[];selected:Set<string>;onSelect:(id:string)=>void;onSelectAll:()=>void;onOpen:(r:Row)=>void;onUpdate:(id:string,key:keyof Row,val:any)=>void;onAdapt:(r:Row)=>void;onRemove:(id:string)=>void;
 }) {
-  const urgency = getUrgency(row.data, row.status);
-  const us = urgency ? URGENCY_STYLES[urgency] : null;
-  const sc = STATUS_COLORS[row.status];
-
-  if (row.formato === EXTRA_TIKTOK_FORMAT) {
-    return (
-      <div style={{ background: "linear-gradient(90deg,#160a2b,#251044)", border: "1px solid #a855f7", borderLeft: "4px solid #d946ef", borderRadius: 12, padding: "12px 14px", marginBottom: 10 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "130px 1fr auto", gap: 10, alignItems: "center" }}>
-          <EditableCell value={row.data} onChange={v => onUpdate(row.id, "data", v)} placeholder="dd/mm/aaaa" urgency={urgency} />
-          <div style={{ fontFamily: "'Cinzel',serif", fontWeight: 800, color: "#f0abfc", letterSpacing: 0.7 }}>🎵 VÍDEO EXTRA TIKTOK</div>
-          <button onClick={() => onRemove(row.id)} style={{ background: "none", border: "none", color: "#a78bfa", cursor: "pointer", fontSize: 18, minWidth: 36, minHeight: 36 }}>✕</button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ background: us ? us.rowBg : sc.rowBg, border: `1px solid ${us ? us.border : sc.border}`, borderLeft: `4px solid ${us ? us.border : sc.border}`, borderRadius: 12, padding: "14px", marginBottom: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 10, color: "#5a3a8a", fontFamily: "'Cinzel',serif" }}>#{idx + 1}</span>
-          <span style={{ fontSize: 13 }}>{REDE_ICONS[row.rede] || "📄"}</span>
-          <span style={{ fontSize: 12, color: "#c9a0f5", fontFamily: "'Cinzel',serif" }}>{row.rede || "—"}</span>
-          {us && <span style={{ background: us.badgeBg, color: us.badgeColor, fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel',serif", borderRadius: 4, padding: "2px 6px", animation: us.anim }}>{us.badge}</span>}
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => onDuplicate(row)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 18, padding: "4px", minWidth: 36, minHeight: 36 }} onMouseEnter={e => (e.currentTarget.style.color = "#c084fc")} onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}>📋</button>
-          <button onClick={() => onRemove(row.id)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 18, padding: "4px", minWidth: 36, minHeight: 36 }} onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")} onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}>✕</button>
-        </div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px" }}>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel',serif", marginBottom: 2, letterSpacing: 1 }}>POSTAGEM</div>
-          <EditableCell value={row.postagem} onChange={v => onUpdate(row.id, "postagem", v)} placeholder="Postagem" />
-        </div>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel',serif", marginBottom: 2, letterSpacing: 1 }}>✨ TEMA</div>
-          <EditableCell value={row.tema} onChange={v => onUpdate(row.id, "tema", v)} placeholder="Título / tema" wide />
-        </div>
-        <div>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel',serif", marginBottom: 2, letterSpacing: 1 }}>📅 DATA</div>
-          <EditableCell value={row.data} onChange={v => onUpdate(row.id, "data", v)} placeholder="dd/mm/aaaa" urgency={urgency} />
-        </div>
-        <div>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel',serif", marginBottom: 2, letterSpacing: 1 }}>🎞 FORMATO</div>
-          <select value={row.formato} onChange={e => onUpdate(row.id, "formato", e.target.value)} style={{ background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 6, padding: "6px", fontSize: 13, fontFamily: "'Cinzel',serif", cursor: "pointer", width: "100%", outline: "none" }}>
-            <option value="">--</option>{FORMATO_OPTIONS.map(o => <option key={o}>{o}</option>)}
-          </select>
-        </div>
-        <div>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel',serif", marginBottom: 2, letterSpacing: 1 }}>🌐 REDE</div>
-          <select value={row.rede} onChange={e => onUpdate(row.id, "rede", e.target.value)} style={{ background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 6, padding: "6px", fontSize: 13, fontFamily: "'Cinzel',serif", cursor: "pointer", width: "100%", outline: "none" }}>
-            <option value="">--</option>{REDE_OPTIONS.map(o => <option key={o}>{o}</option>)}
-          </select>
-        </div>
-        <div>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel',serif", marginBottom: 2, letterSpacing: 1 }}>👤 RESPONSÁVEL</div>
-          <EditableCell value={row.responsavel} onChange={v => onUpdate(row.id, "responsavel", v)} placeholder="Nome" />
-        </div>
-        {row.link_arquivo && (
-  <div style={{ gridColumn: "1 / -1" }}>
-    <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel',serif", marginBottom: 2, letterSpacing: 1 }}>🔗 ARQUIVO</div>
-    <ArquivoPreview url={row.link_arquivo} />
-  </div>
-)}
-        <div style={{ gridColumn: "1 / -1" }}>
-          <div style={{ fontSize: 9, color: "#5a3a8a", fontFamily: "'Cinzel',serif", marginBottom: 4, letterSpacing: 1 }}>🔮 STATUS</div>
-          <select value={row.status} onChange={e => onUpdate(row.id, "status", e.target.value)} style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.border}`, borderRadius: 6, padding: "8px", fontSize: 13, fontFamily: "'Cinzel',serif", fontWeight: 700, cursor: "pointer", width: "100%", outline: "none" }}>
-            {STATUS_OPTIONS.map(o => <option key={o}>{o}</option>)}
-          </select>
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="cxp-card" style={{overflowX:"auto"}}><table className="cxp-table"><thead><tr><th style={{width:38}}><input type="checkbox" checked={rows.length>0&&rows.every(r=>selected.has(r.id))} onChange={onSelectAll}/></th><th>Data</th><th>Conteúdo</th><th>Rede</th><th>Formato</th><th>Responsável</th><th>Status</th><th>Ações</th></tr></thead><tbody>{rows.map(r=>{const c=STATUS_COLORS[r.status];if(r.formato===EXTRA_TIKTOK_FORMAT)return <tr key={r.id} style={{background:"linear-gradient(90deg,#160a2b,#251044)"}}><td><input type="checkbox" checked={selected.has(r.id)} onChange={()=>onSelect(r.id)}/></td><td><input className="cxp-input" type="date" value={dateInputValue(r)} onChange={e=>onUpdate(r.id,"data",isoToBR(e.target.value))}/></td><td colSpan={5} onClick={()=>onOpen(r)} style={{cursor:"pointer",color:"#f0abfc",font:"900 11px 'Cinzel',serif"}}>🎵 VÍDEO EXTRA TIKTOK</td><td><button className="cxp-btn danger" onClick={()=>onRemove(r.id)}>✕</button></td></tr>;
+    return <tr key={r.id} style={{borderLeft:`3px solid ${c.border}`}}><td><input type="checkbox" checked={selected.has(r.id)} onChange={()=>onSelect(r.id)}/></td><td style={{minWidth:145}}><input className="cxp-input" type="date" value={dateInputValue(r)} onChange={e=>onUpdate(r.id,"data",isoToBR(e.target.value))}/></td><td onClick={()=>onOpen(r)} style={{cursor:"pointer",minWidth:220}}><div style={{fontWeight:700,fontSize:12}}>{r.tema||r.postagem}</div><div className="cxp-muted" style={{fontSize:9}}>{r.hook?`Hook: ${r.hook}`:"Abrir painel completo"}</div></td><td><select className="cxp-input" value={r.rede} onChange={e=>onUpdate(r.id,"rede",e.target.value)}><option value="">—</option>{REDE_OPTIONS.map(x=><option key={x}>{x}</option>)}</select></td><td><select className="cxp-input" value={r.formato} onChange={e=>onUpdate(r.id,"formato",e.target.value)}><option value="">—</option>{FORMATO_OPTIONS.map(x=><option key={x}>{x}</option>)}</select></td><td><input className="cxp-input" value={r.responsavel} onChange={e=>onUpdate(r.id,"responsavel",e.target.value)} placeholder="Nome"/></td><td><select value={r.status} onChange={e=>onUpdate(r.id,"status",e.target.value)} style={{...inputStyle,background:c.bg,color:c.text,borderColor:c.border,fontFamily:"'Cinzel',serif",fontWeight:700}}>{STATUS_OPTIONS.map(x=><option key={x}>{x}</option>)}</select></td><td><div style={{display:"flex",gap:5}}><button className="cxp-btn" onClick={()=>onAdapt(r)} title="Adaptar para outra rede">↗</button><button className="cxp-btn danger" onClick={()=>onRemove(r.id)}>✕</button></div></td></tr>})}</tbody></table>{rows.length===0&&<div style={{padding:40,textAlign:"center"}} className="cxp-muted">Nenhum conteúdo nesse filtro.</div>}</div>;
 }
-// ─── TableWithDrag ─────────────────────────────────────────────────────────
-function TableWithDrag({ filtered, loading, rows, updateRow, duplicateRow, removeRow, onReorder }: {
-  filtered: Row[];
-  loading: boolean;
-  rows: Row[];
-  updateRow: (id: string, key: keyof Row, val: string) => void;
-  duplicateRow: (r: Row) => void;
-  removeRow: (id: string) => void;
-  onReorder: (fromId: string, toId: string) => void;
-}) {
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
 
-  return (
-    <div style={{ overflowX: "auto", borderRadius: 16, border: "1px solid #4a2a8a", position: "relative" }}>
-      {loading && (
-        <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}>
-          <div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-        </div>
-      )}
-      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 800 }}>
-        <thead>
-          <tr style={{ background: "linear-gradient(90deg,#2d1b69,#3d1b8a,#2d1b69)" }}>
-            <th style={{ width: 50, padding: "12px 8px", borderRight: "1px solid #4a2a8a" }} />
-            {COLS.map(col => (
-              <th key={col.key} style={{ width: col.width, padding: "12px 10px", textAlign: "left", fontFamily: "'Cinzel',serif", fontSize: 10, fontWeight: 700, color: "#c084fc", letterSpacing: 1, textTransform: "uppercase", borderRight: "1px solid #4a2a8a", whiteSpace: "nowrap" }}>{col.label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {!loading && filtered.length === 0 && (
-            <tr><td colSpan={COLS.length + 1} style={{ padding: 48, textAlign: "center", color: "#5a3a8a", fontFamily: "'Cinzel',serif", fontSize: 13 }}>{rows.length === 0 ? "Nenhuma postagem ainda." : "Nenhuma com esse filtro."}</td></tr>
-          )}
-          {filtered.map((row, idx) => {
-            const urgency  = getUrgency(row.data, row.status);
-            const us       = urgency ? URGENCY_STYLES[urgency] : null;
-            const sc       = STATUS_COLORS[row.status];
-            const isDragOver = dragOverId === row.id && draggingId !== row.id;
-            const isDragging = draggingId === row.id;
-
-            const baseBg     = us ? us.rowBg : sc.rowBg;
-            const baseBorder = us ? us.border : sc.border;
-
-            if (row.formato === EXTRA_TIKTOK_FORMAT) {
-              return (
-                <tr key={row.id} style={{ background: "linear-gradient(90deg,#160a2b,#251044)", borderLeft: "3px solid #d946ef" }}>
-                  <td style={{ padding: "6px 4px", textAlign: "center", borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45" }}>
-                    <button onClick={() => removeRow(row.id)} title="Excluir" style={{ background: "none", border: "none", color: "#a78bfa", cursor: "pointer", fontSize: 14 }}>✕</button>
-                  </td>
-                  <td style={{ padding: "4px 6px", borderRight: "1px solid #1e0f45", borderBottom: "1px solid #1e0f45", width: 110 }}>
-                    <EditableCell value={row.data} onChange={val => updateRow(row.id, "data", val)} placeholder="dd/mm/aaaa" urgency={urgency} />
-                  </td>
-                  <td colSpan={COLS.length - 1} style={{ padding: "10px 16px", borderBottom: "1px solid #1e0f45", verticalAlign: "middle" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                      <div style={{ fontFamily: "'Cinzel',serif", fontSize: 12, fontWeight: 900, color: "#f0abfc", letterSpacing: 1.1 }}>🎵 VÍDEO EXTRA TIKTOK</div>
-                      <span style={{ fontFamily: "'Cinzel',serif", fontSize: 9, color: "#8b5cf6", opacity: 0.85 }}>linha especial</span>
-                    </div>
-                  </td>
-                </tr>
-              );
-            }
-
-            return (
-              <tr
-                key={row.id}
-                draggable
-                onDragStart={e => {
-                  e.dataTransfer.setData("rowId", row.id);
-                  e.dataTransfer.effectAllowed = "move";
-                  setDraggingId(row.id);
-                }}
-                onDragEnd={() => { setDraggingId(null); setDragOverId(null); }}
-                onDragOver={e => { e.preventDefault(); if (draggingId !== row.id) setDragOverId(row.id); }}
-                onDragLeave={() => setDragOverId(null)}
-                onDrop={e => {
-                  e.preventDefault();
-                  const fromId = e.dataTransfer.getData("rowId");
-                  if (fromId && fromId !== row.id) onReorder(fromId, row.id);
-                  setDragOverId(null);
-                  setDraggingId(null);
-                }}
-                style={{
-                  background: isDragOver ? "#2d1b69" : baseBg,
-                  borderLeft: `3px solid ${baseBorder}`,
-                  opacity: isDragging ? 0.4 : 1,
-                  transition: "background 0.15s, opacity 0.15s",
-                  outline: isDragOver ? "2px dashed #c084fc" : "none",
-                  cursor: "grab",
-                }}
-                onMouseEnter={e => { if (!isDragging) e.currentTarget.style.background = "#1e0f45"; }}
-                onMouseLeave={e => { if (!isDragging) e.currentTarget.style.background = isDragOver ? "#2d1b69" : baseBg; }}
-              >
-                <td style={{ padding: "6px 4px", textAlign: "center", borderRight: "1px solid #2d1b69", borderBottom: "1px solid #1e0f45", fontSize: 10, color: "#5a3a8a" }}>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                    <span style={{ fontSize: 14, color: "#3d1b69", cursor: "grab", lineHeight: 1 }}>⠿</span>
-                    <span style={{ fontSize: 10, color: "#5a3a8a" }}>{idx + 1}</span>
-                    <button onClick={() => duplicateRow(row)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12 }} onMouseEnter={e => (e.currentTarget.style.color = "#c084fc")} onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}>📋</button>
-                    <button onClick={() => removeRow(row.id)} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 12 }} onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")} onMouseLeave={e => (e.currentTarget.style.color = "#5a3a8a")}>✕</button>
-                  </div>
-                </td>
-                {COLS.map(col => (
-  <td key={col.key} style={{ padding: "4px 6px", borderRight: "1px solid #1e0f45", borderBottom: "1px solid #1e0f45", verticalAlign: "top" }}>
-    {col.key === "link_arquivo" ? (
-      <div style={{ fontSize: 10, color: row.link_arquivo ? "#7c3aed" : "#3d1b69", fontFamily: "'Cinzel',serif", textAlign: "center", padding: "4px 0" }}>
-        {row.link_arquivo ? `${parseLinks(row.link_arquivo).length} arquivo(s)` : "—"}
-      </div>
-    ) : (
-      <EditableCell value={String(row[col.key] ?? "")} onChange={val => updateRow(row.id, col.key, val)} type={col.type} options={col.options} placeholder={col.placeholder} wide={col.wide} urgency={col.key === "data" ? urgency : undefined} />
-    )}
-    {col.key === "link_arquivo" && row.link_arquivo && (
-      <ArquivoPreview url={row.link_arquivo} />
-    )}
-  </td>
-))}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+function MobileContentCards({ rows, selected, onSelect, onOpen, onUpdate, onAdapt, onRemove }: Parameters<typeof ContentTable>[0]) {
+  return <div style={{display:"grid",gap:9}}>{rows.map(r=>{const c=STATUS_COLORS[r.status];return <div key={r.id} className="cxp-card" style={{padding:12,borderLeft:`4px solid ${c.border}`}}><div style={{display:"flex",gap:8,alignItems:"center"}}><input type="checkbox" checked={selected.has(r.id)} onChange={()=>onSelect(r.id)}/><div onClick={()=>onOpen(r)} style={{flex:1,cursor:"pointer"}}><div style={{fontSize:12,fontWeight:700}}>{r.formato===EXTRA_TIKTOK_FORMAT?"🎵 Vídeo extra TikTok":r.tema||r.postagem}</div><div className="cxp-muted" style={{fontSize:10}}>{r.data||"Sem data"} · {r.rede||"—"} · {r.formato||"—"}</div></div><StatusBadge status={r.status}/></div><div style={{display:"flex",gap:6,marginTop:10}}><select className="cxp-input" value={r.status} onChange={e=>onUpdate(r.id,"status",e.target.value)}>{STATUS_OPTIONS.map(x=><option key={x}>{x}</option>)}</select><button className="cxp-btn" onClick={()=>onAdapt(r)}>↗</button><button className="cxp-btn danger" onClick={()=>onRemove(r.id)}>✕</button></div></div>})}</div>;
 }
+
+function BulkBar({ count, onStatus, onResponsavel, onDate, onPublish, onDuplicate, onDelete, onClear }: { count:number;onStatus:(s:Status)=>void;onResponsavel:(v:string)=>void;onDate:(iso:string)=>void;onPublish:()=>void;onDuplicate:()=>void;onDelete:()=>void;onClear:()=>void }) {
+  const [resp,setResp]=useState("");
+  return <div className="cxp-card" style={{padding:10,display:"flex",gap:7,alignItems:"center",flexWrap:"wrap",marginBottom:10,borderColor:"#7c3aed"}}><strong style={{font:"700 11px 'Cinzel',serif",color:"#c084fc"}}>{count} selecionado{count!==1?"s":""}</strong><select className="cxp-btn" defaultValue="" onChange={e=>{if(e.target.value)onStatus(e.target.value as Status);e.currentTarget.value=""}}><option value="">Mudar status…</option>{STATUS_OPTIONS.map(s=><option key={s}>{s}</option>)}</select><input className="cxp-input" style={{width:150}} value={resp} onChange={e=>setResp(e.target.value)} placeholder="Responsável"/><button className="cxp-btn" onClick={()=>{if(resp.trim())onResponsavel(resp.trim())}}>Aplicar</button><input className="cxp-input" style={{width:145}} type="date" onChange={e=>e.target.value&&onDate(e.target.value)}/><button className="cxp-btn green" onClick={onPublish}>✓ Publicar</button><button className="cxp-btn" onClick={onDuplicate}>Duplicar</button><button className="cxp-btn danger" onClick={onDelete}>Excluir</button><button className="cxp-btn" onClick={onClear}>Limpar</button></div>;
+}
+
+// ─── Drawer completo da postagem ──────────────────────────────────────────
+function PostDrawer({ row, onClose, onUpdate, onToggleChecklist, onAdapt, onRemove }: { row:Row; onClose:()=>void; onUpdate:(id:string,key:keyof Row,val:any)=>void; onToggleChecklist:(id:string,itemId:string)=>void; onAdapt:(r:Row)=>void; onRemove:(id:string)=>void }) {
+  const progress = row.checklist.length ? Math.round(row.checklist.filter(i=>i.done).length/row.checklist.length*100) : 0;
+  const field = (label:string,key:keyof Row, multiline=false, placeholder="") => <div><div className="cxp-label">{label}</div>{multiline?<textarea className="cxp-input" value={String(row[key]??"")} onChange={e=>onUpdate(row.id,key,e.target.value)} placeholder={placeholder}/>:<input className="cxp-input" value={String(row[key]??"")} onChange={e=>onUpdate(row.id,key,e.target.value)} placeholder={placeholder}/>}</div>;
+  return <><div className="cxp-overlay" onClick={onClose}/><aside className="cxp-drawer">
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:14}}><div><div className="cxp-label">Painel da postagem</div><div className="cxp-title" style={{fontSize:18,color:"#e9d5ff"}}>{row.tema||row.postagem}</div></div><button className="cxp-btn" onClick={onClose}>✕</button></div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:12}}><div><div className="cxp-label">Data</div><input className="cxp-input" type="date" value={dateInputValue(row)} onChange={e=>onUpdate(row.id,"data",isoToBR(e.target.value))}/></div><div><div className="cxp-label">Status</div><select className="cxp-input" value={row.status} onChange={e=>onUpdate(row.id,"status",e.target.value)}>{STATUS_OPTIONS.map(s=><option key={s}>{s}</option>)}</select></div><div><div className="cxp-label">Rede</div><select className="cxp-input" value={row.rede} onChange={e=>onUpdate(row.id,"rede",e.target.value)}><option value="">—</option>{REDE_OPTIONS.map(s=><option key={s}>{s}</option>)}</select></div><div><div className="cxp-label">Formato</div><select className="cxp-input" value={row.formato} onChange={e=>onUpdate(row.id,"formato",e.target.value)}><option value="">—</option>{FORMATO_OPTIONS.map(s=><option key={s}>{s}</option>)}</select></div></div>
+    <div style={{display:"grid",gap:10}}>{field("Tema","tema",false,"Tema do conteúdo")}{field("Hook","hook",true,"A primeira frase / ideia que prende atenção")}{field("Roteiro / legenda","roteiro",true,"Roteiro, legenda ou copy principal")}{field("CTA","cta",true,"O que a pessoa deve fazer depois")}{field("Briefing","briefing",true,"Contexto, objetivo e direcionamento")}{field("Referências","referencias",true,"Links, ideias, referências visuais")}{field("Responsável","responsavel",false,"Nome")}{field("Arquivos","link_arquivo",true,"Links do Drive separados por vírgula")}{field("Observações","observacoes",true,"Anotações internas")}</div>
+    <div className="cxp-card" style={{padding:12,marginTop:12}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div className="cxp-title" style={{fontSize:11,color:"#c084fc"}}>Checklist automático</div><span className="cxp-muted" style={{fontSize:10}}>{progress}%</span></div><div className="cxp-progress" style={{marginBottom:10}}><div style={{width:`${progress}%`}}/></div>{row.checklist.map(item=><label key={item.id} style={{display:"flex",gap:8,alignItems:"center",padding:"6px 0",fontSize:12,cursor:"pointer"}}><input type="checkbox" checked={item.done} onChange={()=>onToggleChecklist(row.id,item.id)}/><span style={{textDecoration:item.done?"line-through":"none",color:item.done?"#6f5a95":"#e2d0ff"}}>{item.label}</span></label>)}</div>
+    {row.status==="Publicado"&&<div className="cxp-card" style={{padding:12,marginTop:12}}><div className="cxp-title" style={{fontSize:11,color:"#86efac",marginBottom:10}}>Performance orgânica</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{(["views","likes","shares","saves","followers_gained"] as (keyof Row)[]).map(k=><div key={String(k)}><div className="cxp-label">{{views:"Views",likes:"Curtidas",shares:"Compart.",saves:"Salvos",followers_gained:"Seguidores"}[k as string]}</div><input className="cxp-input" type="number" min="0" value={Number(row[k]||0)} onChange={e=>onUpdate(row.id,k,Number(e.target.value))}/></div>)}</div></div>}
+    <div className="cxp-card" style={{padding:12,marginTop:12}}><div className="cxp-title" style={{fontSize:11,color:"#c084fc",marginBottom:8}}>Histórico</div>{row.historico.length===0?<div className="cxp-muted" style={{fontSize:11}}>Nenhuma alteração importante registrada ainda.</div>:row.historico.slice().reverse().slice(0,30).map((h,i)=><div key={`${h.at}-${i}`} style={{borderTop:i?"1px solid #211042":"none",padding:"7px 0"}}><div style={{fontSize:11}}><strong>{h.actor}</strong> alterou {prettyField(h.field)} <span className="cxp-muted">{h.from||"—"}</span> → <span style={{color:"#c084fc"}}>{h.to||"—"}</span></div><div className="cxp-muted" style={{fontSize:9,marginTop:2}}>{humanDateTime(h.at)}</div></div>)}</div>
+    <div style={{display:"flex",gap:7,marginTop:14,flexWrap:"wrap"}}><button className="cxp-btn primary" onClick={()=>onAdapt(row)}>Adaptar para outra rede</button><button className="cxp-btn danger" onClick={()=>onRemove(row.id)}>Excluir</button></div>
+  </aside></>;
+}
+
+// ─── Templates / recorrência / adaptação ──────────────────────────────────
+function TemplateModal({ onClose, onCreate }: { onClose:()=>void; onCreate:(t:TemplateDef)=>void }) {
+  return <><div className="cxp-overlay" onClick={onClose}/><div className="cxp-modal"><SectionTitle eyebrow="Novo conteúdo">Criar a partir de modelo</SectionTitle><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:9}}>{TEMPLATES.map(t=><button key={t.id} onClick={()=>onCreate(t)} className="cxp-card" style={{padding:14,textAlign:"left",cursor:"pointer",color:"#e2d0ff"}}><div style={{fontSize:24,marginBottom:8}}>{t.icon}</div><div className="cxp-title" style={{fontSize:11,color:"#c084fc"}}>{t.label}</div><div className="cxp-muted" style={{fontSize:10,marginTop:4}}>{t.rede} · {t.formato}</div></button>)}</div><div style={{textAlign:"right",marginTop:12}}><button className="cxp-btn" onClick={onClose}>Cancelar</button></div></div></>;
+}
+function RecurrenceModal({ mes, onClose, onGenerate }: { mes:number;onClose:()=>void;onGenerate:(weekdays:number[],template:TemplateDef)=>void }) {
+  const [days,setDays]=useState<number[]>([2,4]);
+  const [templateId,setTemplateId]=useState("reels");
+  const toggle=(d:number)=>setDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d]);
+  const preset=(type:string)=>{if(type==="tt"){setTemplateId("tiktok");setDays([1,3,5])}else if(type==="daily"){setTemplateId("caixinha");setDays([0,1,2,3,4,5,6])}else{setTemplateId("reels");setDays([2,4])}};
+  const template=TEMPLATES.find(t=>t.id===templateId)!;
+  return <><div className="cxp-overlay" onClick={onClose}/><div className="cxp-modal"><SectionTitle eyebrow={`Recorrência · ${MONTHS[mes]}`}>Gerar calendário automático</SectionTitle><div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}><button className="cxp-btn" onClick={()=>preset("twice")}>Terça + quinta</button><button className="cxp-btn" onClick={()=>preset("tt")}>3 extras TikTok / semana</button><button className="cxp-btn" onClick={()=>preset("daily")}>Story diário</button></div><div className="cxp-label">Modelo</div><select className="cxp-input" value={templateId} onChange={e=>setTemplateId(e.target.value)}>{TEMPLATES.map(t=><option value={t.id} key={t.id}>{t.label}</option>)}</select><div className="cxp-label" style={{marginTop:12}}>Dias da semana</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{WEEKDAYS.map((w,i)=><button key={w} className={`cxp-chip ${days.includes(i)?"active":""}`} onClick={()=>toggle(i)}>{w}</button>)}</div><div className="cxp-muted" style={{fontSize:11,marginTop:12}}>O sistema criará uma postagem em todos os dias selecionados deste mês. Depois você pode arrastar datas normalmente.</div><div style={{display:"flex",justifyContent:"flex-end",gap:7,marginTop:14}}><button className="cxp-btn" onClick={onClose}>Cancelar</button><button className="cxp-btn primary" disabled={!days.length} onClick={()=>onGenerate(days,template)}>Gerar recorrência</button></div></div></>;
+}
+function AdaptModal({ row, onClose, onCreate }: { row:Row;onClose:()=>void;onCreate:(network:string,format:string)=>void }) {
+  const [network,setNetwork]=useState(row.rede==="TikTok"?"Instagram":"TikTok");
+  const suggested=network==="YouTube"?"Shorts":network==="TikTok"?"Reels":row.formato===EXTRA_TIKTOK_FORMAT?"Reels":row.formato;
+  const [format,setFormat]=useState(suggested);
+  useEffect(()=>{setFormat(network==="YouTube"?"Shorts":network==="TikTok"?"Reels":row.formato===EXTRA_TIKTOK_FORMAT?"Reels":row.formato)},[network,row.formato]);
+  return <><div className="cxp-overlay" onClick={onClose}/><div className="cxp-modal"><SectionTitle eyebrow="Reaproveitar conteúdo">Adaptar para outra rede</SectionTitle><div className="cxp-muted" style={{fontSize:12,marginBottom:12}}>{row.tema||row.postagem}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}><div><div className="cxp-label">Rede destino</div><select className="cxp-input" value={network} onChange={e=>setNetwork(e.target.value)}>{REDE_OPTIONS.filter(r=>r!=="Todos").map(r=><option key={r}>{r}</option>)}</select></div><div><div className="cxp-label">Formato destino</div><select className="cxp-input" value={format} onChange={e=>setFormat(e.target.value)}>{FORMATO_OPTIONS.filter(f=>f!==EXTRA_TIKTOK_FORMAT).map(f=><option key={f}>{f}</option>)}</select></div></div><div className="cxp-muted" style={{fontSize:11,marginTop:12}}>Tema, hook, roteiro, arquivos e briefing serão copiados. A nova versão volta para “Ideia” com checklist novo.</div><div style={{display:"flex",justifyContent:"flex-end",gap:7,marginTop:14}}><button className="cxp-btn" onClick={onClose}>Cancelar</button><button className="cxp-btn primary" onClick={()=>onCreate(network,format)}>Criar adaptação</button></div></div></>;
+}
+
+// ─── Produtividade e performance ──────────────────────────────────────────
+function ProductivityView({ rows }: { rows:Row[] }) {
+  const active=rows.filter(r=>r.status!=="Cancelado");
+  const published=active.filter(r=>r.status==="Publicado");
+  const overdue=active.filter(isOverdue);
+  const onTime=published.filter(r=>{if(!r.published_at||!dateInputValue(r))return false;return new Date(r.published_at).toISOString().slice(0,10)<=dateInputValue(r)}).length;
+  const onTimePct=published.length?Math.round(onTime/published.length*100):0;
+  const withPerf=published.filter(r=>r.views>0);
+  const engagement=(r:Row)=>r.likes+r.shares+r.saves;
+  const byNetwork=REDE_OPTIONS.filter(x=>x!=="Todos").map(rede=>({label:rede,val:published.filter(r=>r.rede===rede).length})).filter(x=>x.val);
+  const byFormat=FORMATO_OPTIONS.map(formato=>({label:formato,val:published.filter(r=>r.formato===formato).length})).filter(x=>x.val);
+  const weekly=Array.from({length:6},(_,i)=>({label:`Sem. ${i+1}`,planned:active.filter(r=>{const iso=dateInputValue(r);return iso&&Math.floor((Number(iso.slice(8,10))-1)/7)===i}).length,published:published.filter(r=>{const iso=dateInputValue(r);return iso&&Math.floor((Number(iso.slice(8,10))-1)/7)===i}).length})).filter(x=>x.planned||x.published);
+  const perfFormat=Array.from(new Set(withPerf.map(r=>r.formato))).map(formato=>{const rs=withPerf.filter(r=>r.formato===formato);return{label:formato,avg:Math.round(rs.reduce((s,r)=>s+r.views,0)/rs.length),eng:Math.round(rs.reduce((s,r)=>s+engagement(r),0)/rs.length)}}).sort((a,b)=>b.avg-a.avg);
+  const perfTheme=Array.from(new Set(withPerf.map(r=>r.tema.trim()).filter(Boolean))).map(tema=>{const rs=withPerf.filter(r=>r.tema.trim()===tema);return{label:tema,avg:Math.round(rs.reduce((sum,r)=>sum+r.views,0)/rs.length),count:rs.length}}).sort((a,b)=>b.avg-a.avg).slice(0,6);
+  const top=withPerf.slice().sort((a,b)=>b.views-a.views).slice(0,6);
+  const maxBar=Math.max(1,...byNetwork.map(x=>x.val),...byFormat.map(x=>x.val));
+  return <div><SectionTitle eyebrow="O que está saindo do papel">Produtividade editorial</SectionTitle><div className="cxp-grid-kpis" style={{marginBottom:14}}>{[["Planejados",active.length,"#c084fc"],["Publicados",published.length,"#86efac"],["No prazo",`${onTimePct}%`,"#6ee7b7"],["Atrasados",overdue.length,"#fca5a5"]].map(([l,v,c])=><div className="cxp-card cxp-kpi" key={String(l)}><div className="cxp-label">{l}</div><strong style={{color:String(c)}}>{v}</strong></div>)}</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:12}}><div className="cxp-card" style={{padding:14}}><div className="cxp-title" style={{fontSize:11,color:"#c084fc",marginBottom:10}}>Publicados por rede</div>{byNetwork.length?byNetwork.map(x=><div key={x.label} style={{display:"grid",gridTemplateColumns:"95px 1fr 30px",alignItems:"center",gap:8,marginBottom:8}}><span style={{fontSize:11}}>{REDE_ICONS[x.label]} {x.label}</span><div className="cxp-progress"><div style={{width:`${x.val/maxBar*100}%`}}/></div><span className="cxp-muted" style={{fontSize:10,textAlign:"right"}}>{x.val}</span></div>):<div className="cxp-muted" style={{fontSize:11}}>Sem publicações ainda.</div>}</div><div className="cxp-card" style={{padding:14}}><div className="cxp-title" style={{fontSize:11,color:"#c084fc",marginBottom:10}}>Publicados por formato</div>{byFormat.length?byFormat.map(x=><div key={x.label} style={{display:"grid",gridTemplateColumns:"110px 1fr 30px",alignItems:"center",gap:8,marginBottom:8}}><span style={{fontSize:11}}>{x.label}</span><div className="cxp-progress"><div style={{width:`${x.val/maxBar*100}%`}}/></div><span className="cxp-muted" style={{fontSize:10,textAlign:"right"}}>{x.val}</span></div>):<div className="cxp-muted" style={{fontSize:11}}>Sem dados ainda.</div>}</div><div className="cxp-card" style={{padding:14}}><div className="cxp-title" style={{fontSize:11,color:"#c084fc",marginBottom:10}}>Produção semanal</div>{weekly.length?weekly.map(x=><div key={x.label} style={{borderTop:"1px solid #211042",padding:"8px 0",display:"grid",gridTemplateColumns:"70px 1fr",gap:8}}><span style={{fontSize:10}}>{x.label}</span><span className="cxp-muted" style={{fontSize:10}}>{x.published} publicados / {x.planned} planejados</span></div>):<div className="cxp-muted" style={{fontSize:11}}>Sem conteúdo datado neste mês.</div>}</div></div><SectionTitle eyebrow="Leitura do orgânico" right={<span className="cxp-muted" style={{fontSize:10}}>{withPerf.length} posts com métricas</span>}>Performance do conteúdo</SectionTitle><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:12}}><div className="cxp-card" style={{padding:14}}><div className="cxp-title" style={{fontSize:11,color:"#86efac",marginBottom:10}}>Formato x desempenho</div>{perfFormat.length?perfFormat.map(x=><div key={x.label} style={{borderTop:"1px solid #211042",padding:"8px 0",display:"flex",justifyContent:"space-between",gap:10}}><span style={{fontSize:11}}>{x.label}</span><span style={{fontSize:10,color:"#c084fc"}}>{x.avg.toLocaleString("pt-BR")} views · {x.eng.toLocaleString("pt-BR")} interações</span></div>):<div className="cxp-muted" style={{fontSize:11}}>Preencha as métricas nos posts publicados para começar a comparar formatos.</div>}</div><div className="cxp-card" style={{padding:14}}><div className="cxp-title" style={{fontSize:11,color:"#86efac",marginBottom:10}}>Top conteúdos / hooks</div>{top.length?top.map((r,i)=><div key={r.id} style={{borderTop:i?"1px solid #211042":"none",padding:"8px 0"}}><div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{fontSize:11,fontWeight:700}}>{r.tema||r.postagem}</span><span style={{fontSize:10,color:"#c084fc"}}>{r.views.toLocaleString("pt-BR")}</span></div><div className="cxp-muted" style={{fontSize:9,marginTop:2}}>{r.hook?`Hook: ${r.hook}`:`${r.formato} · ${r.rede}`}</div></div>):<div className="cxp-muted" style={{fontSize:11}}>Ainda não há métricas orgânicas suficientes.</div>}</div><div className="cxp-card" style={{padding:14}}><div className="cxp-title" style={{fontSize:11,color:"#86efac",marginBottom:10}}>Tema x desempenho</div>{perfTheme.length?perfTheme.map((x,i)=><div key={`${x.label}-${i}`} style={{borderTop:i?"1px solid #211042":"none",padding:"8px 0",display:"flex",justifyContent:"space-between",gap:10}}><span style={{fontSize:11,overflow:"hidden",textOverflow:"ellipsis"}}>{x.label}</span><span style={{fontSize:10,color:"#c084fc",whiteSpace:"nowrap"}}>{x.avg.toLocaleString("pt-BR")} views · {x.count} post{x.count!==1?"s":""}</span></div>):<div className="cxp-muted" style={{fontSize:11}}>Repita temas e preencha views para enxergar padrões reais.</div>}</div></div></div>;
+}
+
+// ─── Leads / CRM ───────────────────────────────────────────────────────────
+function LeadsView({ isMobile, openNewNonce = 0 }: { isMobile:boolean; openNewNonce?:number }) {
+  const [leads,setLeads]=useState<Lead[]>([]),[loading,setLoading]=useState(true),[search,setSearch]=useState(""),[filterStatus,setFilterStatus]=useState("Todos"),[expanded,setExpanded]=useState<string|null>(null),[expandedChannel,setExpandedChannel]=useState<string|null>(null),[showNew,setShowNew]=useState(false),[newLead,setNewLead]=useState({nome:"",whatsapp_discord:"",origem:"Manual"}),[error,setError]=useState("");
+  const load=()=>{setLoading(true);dbLoadLeads().then(setLeads).catch(e=>setError(e.message)).finally(()=>setLoading(false))};
+  useEffect(load,[]);
+  useEffect(()=>{ if(openNewNonce>0) setShowNew(true); },[openNewNonce]);
+  const patch=async(id:string,p:Partial<Lead>)=>{setLeads(prev=>prev.map(l=>l.id===id?{...l,...p}:l));try{await dbUpdateLead(id,p)}catch(e){setError((e as Error).message);load()}};
+  const create=async()=>{if(!newLead.nome.trim())return;try{await dbCreateLead({...newLead,status:"Novo lead",notas:"Origem: Manual"});setNewLead({nome:"",whatsapp_discord:"",origem:"Manual"});setShowNew(false);load()}catch(e){setError((e as Error).message)}};
+  const filtered=leads.filter(l=>{if(filterStatus!=="Todos"&&l.status!==filterStatus)return false;const q=search.toLowerCase();return !q||[l.nome,l.whatsapp_discord,l.sistemas_desejados,l.origem,l.utm_source,l.utm_campaign,l.influencer_codigo,l.anotacao_rapida].some(v=>v?.toLowerCase().includes(q))});
+  const channelLeads=(chaves:string[])=>leads.filter(l=>{const s=sourceText(l).toLowerCase();return chaves.some(k=>s.includes(k))});
+  return <div><SectionTitle eyebrow="Mini CRM" right={<button className="cxp-btn primary" onClick={()=>setShowNew(true)}>＋ Novo lead</button>}>Leads & clientes</SectionTitle>{error&&<div className="cxp-card" style={{padding:10,borderColor:"#7f1d1d",color:"#fca5a5",fontSize:11,marginBottom:10}}>{error}</div>}<div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:7,marginBottom:10}}>{LEAD_STATUS_OPTIONS.map(s=>{const c=LEAD_STATUS_COLORS[s];const n=leads.filter(l=>l.status===s).length;return <button key={s} onClick={()=>setFilterStatus(filterStatus===s?"Todos":s)} style={{background:c.bg,border:`1px solid ${filterStatus===s?"#fff":c.border}`,borderRadius:9,padding:9,cursor:"pointer",color:c.text}}><div style={{font:"900 18px 'Cinzel',serif"}}>{n}</div><div style={{font:"700 8px 'Cinzel',serif"}}>{s}</div></button>})}</div><div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(3,1fr)":"repeat(5,1fr)",gap:7,marginBottom:10}}>{LEAD_CHANNELS.map(ch=>{const items=channelLeads(ch.chaves);return <button key={ch.label} onClick={()=>setExpandedChannel(expandedChannel===ch.label?null:ch.label)} className="cxp-card" style={{padding:8,cursor:"pointer",color:"#e2d0ff"}}><img src={ch.icon} alt="" style={{width:30,height:30,objectFit:"contain"}}/><div style={{font:"900 17px 'Cinzel',serif"}}>{items.length}</div><div className="cxp-muted" style={{fontSize:8}}>{ch.label}</div></button>})}</div>{expandedChannel&&(()=>{const ch=LEAD_CHANNELS.find(x=>x.label===expandedChannel)!;const items=channelLeads(ch.chaves);return <div className="cxp-card" style={{padding:10,marginBottom:10}}><div className="cxp-label">{ch.label} · funil</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{LEAD_STATUS_OPTIONS.map(s=><span key={s} className="cxp-chip">{s}: {items.filter(l=>l.status===s).length}</span>)}</div></div>})()}<div style={{display:"flex",gap:7,marginBottom:10,flexWrap:"wrap"}}><input className="cxp-input" style={{flex:1,minWidth:220}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar nome, contato, origem, campanha…"/><select className="cxp-input" style={{width:180}} value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}><option>Todos</option>{LEAD_STATUS_OPTIONS.map(s=><option key={s}>{s}</option>)}</select><button className="cxp-btn" onClick={load}>⟳</button></div>{loading?<div style={{padding:50,display:"flex",justifyContent:"center"}}><Spinner/></div>:<div style={{display:"grid",gap:8}}>{filtered.map(lead=>{const c=LEAD_STATUS_COLORS[lead.status]||LEAD_STATUS_COLORS["Novo lead"];const open=expanded===lead.id;return <div key={lead.id} className="cxp-card" style={{borderLeft:`4px solid ${c.border}`,overflow:"hidden"}}><div onClick={()=>setExpanded(open?null:lead.id)} style={{padding:11,display:"flex",gap:8,alignItems:"center",cursor:"pointer"}}><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700}}>{lead.nome||"—"}</div><div className="cxp-muted" style={{fontSize:10}}>{lead.whatsapp_discord||"sem contato"} · {lead.origem||lead.utm_source||"origem não informada"}</div></div><select value={lead.status} onClick={e=>e.stopPropagation()} onChange={e=>patch(lead.id,{status:e.target.value})} style={{...inputStyle,width:"auto",background:c.bg,color:c.text,borderColor:c.border,fontSize:10}}>{LEAD_STATUS_OPTIONS.map(s=><option key={s}>{s}</option>)}</select></div>{open&&<div style={{padding:"0 11px 12px",borderTop:"1px solid #211042"}}><div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,1fr)",gap:8,marginTop:10}}>{[
+          ["Próxima ação","proxima_acao","text"],["Follow-up","follow_up_date","date"],["Responsável","responsavel","text"],["Último contato","ultimo_contato","date"],["Anotação rápida","anotacao_rapida","text"],["Origem","origem","text"],["UTM Source","utm_source","text"],["UTM Campaign","utm_campaign","text"],["Influencer","influencer_codigo","text"]
+        ].map(([label,key,type])=><div key={key}><div className="cxp-label">{label}</div><input className="cxp-input" type={type} defaultValue={String((lead as any)[key]||"")} onBlur={e=>patch(lead.id,{[key]:e.target.value} as any)}/></div>)}</div><div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:8,marginTop:10}}>{[["Idade",lead.idade],["Tempo RPG",lead.tempo_rpg],["Sistemas",lead.sistemas_desejados],["Melhor dia",lead.melhor_dia]].map(([l,v])=><div key={l}><div className="cxp-label">{l}</div><div style={{fontSize:11}}>{v||"—"}</div></div>)}</div></div>}</div>})}</div>}{showNew&&<><div className="cxp-overlay" onClick={()=>setShowNew(false)}/><div className="cxp-modal"><SectionTitle>Novo lead manual</SectionTitle><div style={{display:"grid",gap:8}}><input className="cxp-input" placeholder="Nome" value={newLead.nome} onChange={e=>setNewLead(p=>({...p,nome:e.target.value}))}/><input className="cxp-input" placeholder="WhatsApp / Discord" value={newLead.whatsapp_discord} onChange={e=>setNewLead(p=>({...p,whatsapp_discord:e.target.value}))}/><input className="cxp-input" placeholder="Origem" value={newLead.origem} onChange={e=>setNewLead(p=>({...p,origem:e.target.value}))}/></div><div style={{display:"flex",justifyContent:"flex-end",gap:7,marginTop:12}}><button className="cxp-btn" onClick={()=>setShowNew(false)}>Cancelar</button><button className="cxp-btn primary" onClick={create}>Criar</button></div></div></>}</div>;
+}
+
+// ─── Influencers ───────────────────────────────────────────────────────────
+function InfluencersView({ isMobile }: { isMobile:boolean }) {
+  const [influencers,setInfluencers]=useState<Influencer[]>([]),[leads,setLeads]=useState<Lead[]>([]),[loading,setLoading]=useState(true),[nome,setNome]=useState(""),[codigo,setCodigo]=useState(""),[saving,setSaving]=useState(false),[error,setError]=useState(""),[copied,setCopied]=useState<string|null>(null);
+  const load=()=>{setLoading(true);Promise.all([dbLoadInfluencers(),dbLoadLeads()]).then(([i,l])=>{setInfluencers(i);setLeads(l)}).catch(e=>setError(e.message)).finally(()=>setLoading(false))};useEffect(load,[]);
+  const leadsFor=(code:string)=>leads.filter(l=>{const s=sourceText(l).toLowerCase();return l.influencer_codigo?.toLowerCase()===code.toLowerCase()||s.includes(code.toLowerCase())});
+  const create=async()=>{const c=slugifyCodigo(codigo||nome);if(!nome.trim()||!c)return;setSaving(true);try{await dbCreateInfluencer(nome.trim(),c);setNome("");setCodigo("");load()}catch(e){setError((e as Error).message)}finally{setSaving(false)}};
+  const ranking=[...influencers].sort((a,b)=>leadsFor(b.codigo).length-leadsFor(a.codigo).length||b.clicks-a.clicks);
+  return <div><SectionTitle eyebrow="Aquisição por parceiro">Influencers & links</SectionTitle><div className="cxp-card" style={{padding:12,marginBottom:12}}><div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"end"}}><div style={{flex:1,minWidth:180}}><div className="cxp-label">Nome</div><input className="cxp-input" value={nome} onChange={e=>{setNome(e.target.value);if(!codigo)setCodigo(slugifyCodigo(e.target.value))}}/></div><div style={{width:isMobile?"100%":180}}><div className="cxp-label">Código</div><input className="cxp-input" value={codigo} onChange={e=>setCodigo(slugifyCodigo(e.target.value))}/></div><button className="cxp-btn primary" disabled={saving} onClick={create}>{saving?"Criando…":"Criar link"}</button></div>{error&&<div style={{color:"#fca5a5",fontSize:11,marginTop:8}}>{error}</div>}</div>{loading?<div style={{padding:50,display:"flex",justifyContent:"center"}}><Spinner/></div>:<div style={{display:"grid",gap:9}}>{ranking.map((inf,idx)=>{const li=leadsFor(inf.codigo);const qualified=li.filter(l=>["Em contato","Lista de espera","Mesa alocada"].includes(l.status));const final=li.filter(l=>l.status==="Mesa alocada");const finalRate=inf.clicks?final.length/inf.clicks*100:0;const link=`${window.location.origin}/?ref=${inf.codigo}`;return <div key={inf.id} className="cxp-card" style={{padding:13,borderLeft:`4px solid ${inf.ativo?"#7c3aed":"#4b5563"}`,opacity:inf.ativo?1:.65}}><div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{font:"900 16px 'Cinzel',serif",color:idx===0&&li.length?"#fbbf24":"#6f5a95"}}>{idx===0&&li.length?"🏆":`#${idx+1}`}</span><div style={{flex:1,fontWeight:700}}>{inf.nome}</div><button className={`cxp-btn ${inf.ativo?"green":""}`} onClick={()=>{setInfluencers(p=>p.map(x=>x.id===inf.id?{...x,ativo:!x.ativo}:x));dbUpdateInfluencer(inf.id,{ativo:!inf.ativo}).catch(()=>load())}}>{inf.ativo?"Ativo":"Pausado"}</button><button className="cxp-btn danger" onClick={async()=>{if(window.confirm(`Excluir ${inf.nome}?`)){await dbDeleteInfluencer(inf.id);load()}}}>✕</button></div><div style={{display:"flex",gap:6,marginTop:9}}><input className="cxp-input" readOnly value={link}/><button className="cxp-btn" onClick={()=>{navigator.clipboard.writeText(link);setCopied(inf.codigo);setTimeout(()=>setCopied(null),1200)}}>{copied===inf.codigo?"Copiado":"Copiar"}</button></div><div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(5,1fr)",gap:7,marginTop:9}}>{[["Cliques",inf.clicks,"#93c5fd"],["Leads",li.length,"#c084fc"],["Qualificados",qualified.length,"#fcd34d"],["Mesas",final.length,"#86efac"],["Conv. final",`${finalRate.toFixed(1)}%`,"#6ee7b7"]].map(([l,v,c])=><div key={String(l)} style={{background:"#0d0720",borderRadius:8,padding:8,textAlign:"center"}}><div style={{font:"900 17px 'Cinzel',serif",color:String(c)}}>{v}</div><div className="cxp-label" style={{margin:0}}>{l}</div></div>)}</div></div>})}</div>}</div>;
+}
+
+// ─── Command palette ───────────────────────────────────────────────────────
+function CommandPalette({ open, onClose, onNewPost, onExtraTikTok, onToday, onLeads, onInfluencers, onOpenPost }: { open:boolean;onClose:()=>void;onNewPost:()=>void;onExtraTikTok:()=>void;onToday:()=>void;onLeads:()=>void;onInfluencers:()=>void;onOpenPost:(r:Row)=>void }) {
+  const [q,setQ]=useState(""),[rows,setRows]=useState<Row[]>([]),[leads,setLeads]=useState<Lead[]>([]),[infs,setInfs]=useState<Influencer[]>([]),[loading,setLoading]=useState(false);
+  useEffect(()=>{if(open){setQ("");setLoading(true);Promise.all([dbLoadAllRows(),dbLoadLeads(),dbLoadInfluencers()]).then(([r,l,i])=>{setRows(r);setLeads(l);setInfs(i)}).finally(()=>setLoading(false))}},[open]);
+  useEffect(()=>{if(open)setTimeout(()=>document.getElementById("cxp-command-input")?.focus(),30)},[open]);
+  if(!open)return null;
+  const query=q.trim().toLowerCase();
+  const postResults=query?rows.filter(r=>[r.postagem,r.tema,r.hook,r.roteiro,r.briefing,r.observacoes,r.rede,r.formato].some(v=>v?.toLowerCase().includes(query))).slice(0,7):[];
+  const leadResults=query?leads.filter(l=>[l.nome,l.whatsapp_discord,l.origem,l.utm_source,l.utm_campaign,l.anotacao_rapida].some(v=>v?.toLowerCase().includes(query))).slice(0,5):[];
+  const infResults=query?infs.filter(i=>[i.nome,i.codigo].some(v=>v?.toLowerCase().includes(query))).slice(0,5):[];
+  const run=(fn:()=>void)=>{fn();onClose()};
+  return <><div className="cxp-overlay" style={{zIndex:1199}} onClick={onClose}/><div className="cxp-command"><input id="cxp-command-input" value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar tudo ou executar um comando…" style={{width:"100%",background:"#0d0720",border:"none",borderBottom:"1px solid #3d246f",padding:"16px",color:"#e2d0ff",outline:"none",fontSize:14}}/>{loading&&<div style={{padding:15,display:"flex",justifyContent:"center"}}><Spinner/></div>}{!query&&!loading&&<>{[["＋","Nova postagem",onNewPost],["🎵","Vídeo extra TikTok",onExtraTikTok],["☀","Ir para Central de Hoje",onToday],["👥","Novo lead / abrir CRM",onLeads],["🔗","Novo influencer",onInfluencers]].map(([icon,label,fn])=><div key={String(label)} className="cxp-command-row" onClick={()=>run(fn as ()=>void)}><span>{icon as string}</span><span style={{fontSize:12}}>{label as string}</span></div>)}</>}{query&&!loading&&<>{postResults.map(r=><div key={r.id} className="cxp-command-row" onClick={()=>run(()=>onOpenPost(r))}><span>{REDE_ICONS[r.rede]||"📄"}</span><div><div style={{fontSize:12}}>{r.tema||r.postagem}</div><div className="cxp-muted" style={{fontSize:9}}>Conteúdo · {r.data||"sem data"} · {r.formato}</div></div></div>)}{leadResults.map(l=><div key={l.id} className="cxp-command-row" onClick={()=>run(onLeads)}><span>👥</span><div><div style={{fontSize:12}}>{l.nome}</div><div className="cxp-muted" style={{fontSize:9}}>Lead · {l.whatsapp_discord||"sem contato"}</div></div></div>)}{infResults.map(i=><div key={i.id} className="cxp-command-row" onClick={()=>run(onInfluencers)}><span>🔗</span><div><div style={{fontSize:12}}>{i.nome}</div><div className="cxp-muted" style={{fontSize:9}}>Influencer · {i.codigo}</div></div></div>)}{!postResults.length&&!leadResults.length&&!infResults.length&&<div className="cxp-muted" style={{padding:18,textAlign:"center",fontSize:11}}>Nada encontrado.</div>}</>}</div></>;
+}
+
 // ─── Dashboard ─────────────────────────────────────────────────────────────
-function Dashboard({ onVoltar }: { onVoltar: () => void }) {
-  const isMobile = useIsMobile();
-  const [rows, setRows]             = useState<Row[]>([]);
-  const [mes, setMes]               = useState(new Date().getMonth());
-  const [filter, setFilter]         = useState("Todos");
-  const [filterRede, setFilterRede] = useState("Todos");
-  const [filterDataInicio, setFilterDataInicio] = useState("");
-  const [filterDataFim, setFilterDataFim]       = useState("");
-  const [loading, setLoading]       = useState(true);
-  const [syncStatus, setSyncStatus] = useState<"ok"|"saving"|"error">("ok");
-  const [viewMode, setViewMode]     = useState<ViewMode>("tabela");
-  const [selectedDay, setSelectedDay] = useState<{ day: number; rows: Row[] } | null>(null);
-  const [appTab, setAppTab]         = useState<AppTab>("calendario");
+function Dashboard({ onVoltar }: { onVoltar:()=>void }) {
+  const isMobile=useIsMobile();
+  const [rows,setRows]=useState<Row[]>([]),rowsRef=useRef<Row[]>([]);
+  const [centralRows,setCentralRows]=useState<Row[]>([]),[centralLeads,setCentralLeads]=useState<Lead[]>([]),[centralLoading,setCentralLoading]=useState(true);
+  const [mes,setMes]=useState(new Date().getMonth()),[appTab,setAppTab]=useState<AppTab>("hoje"),[viewMode,setViewMode]=useState<ViewMode>("tabela"),[calendarScope,setCalendarScope]=useState<CalendarScope>("mes"),[weekIndex,setWeekIndex]=useState(0);
+  const [filterStatus,setFilterStatus]=useState("Todos"),[filterRede,setFilterRede]=useState("Todos"),[search,setSearch]=useState("");
+  const [loading,setLoading]=useState(true),[syncStatus,setSyncStatus]=useState<"ok"|"saving"|"error">("ok"),[syncError,setSyncError]=useState("");
+  const [selectedPostId,setSelectedPostId]=useState<string|null>(null),[selectedIds,setSelectedIds]=useState<Set<string>>(new Set());
+  const [showTemplates,setShowTemplates]=useState(false),[showRecurrence,setShowRecurrence]=useState(false),[adaptRow,setAdaptRow]=useState<Row|null>(null),[commandOpen,setCommandOpen]=useState(false),[leadNewNonce,setLeadNewNonce]=useState(0);
+  const [undo,setUndo]=useState<{rows:Row[];indexes:number[]}|null>(null);const undoTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const pendingTimers=useRef<Map<string,ReturnType<typeof setTimeout>>>(new Map()),pendingPatches=useRef<Map<string,Partial<Row>>>(new Map()),savingIds=useRef<Set<string>>(new Set());
 
-  const pendingUpserts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const pendingPatches = useRef<Map<string, Partial<Row>>>(new Map());
-  const savingIds = useRef<Set<string>>(new Set());
-  const rowsRef = useRef<Row[]>([]);
-  const [syncError, setSyncError] = useState("");
+  const setRowsSafe=(fn:(prev:Row[])=>Row[])=>setRows(prev=>{const next=fn(prev);rowsRef.current=next;return next});
+  const loadRows=useCallback(async(m:number,silent=false)=>{if(!silent)setLoading(true);try{const data=await dbLoad(m);setRows(prev=>{const next=data.map(sr=>(pendingTimers.current.has(sr.id)||savingIds.current.has(sr.id))?(prev.find(r=>r.id===sr.id)||sr):sr);rowsRef.current=next;return next});setSyncStatus("ok")}catch(e){setSyncError((e as Error).message);setSyncStatus("error")}finally{if(!silent)setLoading(false)}},[]);
+  const loadCentral=useCallback(async()=>{setCentralLoading(true);try{const [r,l]=await Promise.all([dbLoadAllRows(),dbLoadLeads()]);setCentralRows(r);setCentralLeads(l)}catch(e){console.error(e)}finally{setCentralLoading(false)}},[]);
+  useEffect(()=>{loadRows(mes);setSelectedIds(new Set())},[mes,loadRows]);
+  useEffect(()=>{
+    const now=new Date(), year=now.getFullYear();
+    const firstDay=new Date(year,mes,1).getDay();
+    setWeekIndex(now.getMonth()===mes?Math.floor((firstDay+now.getDate()-1)/7):0);
+  },[mes,calendarScope]);
+  useEffect(()=>{loadCentral()},[loadCentral]);
+  useEffect(()=>{const t=setInterval(()=>{const tag=document.activeElement?.tagName;if(["INPUT","TEXTAREA","SELECT"].includes(tag||""))return;loadRows(mes,true)},30000);return()=>clearInterval(t)},[mes,loadRows]);
+  useEffect(()=>{const h=(e:KeyboardEvent)=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();setCommandOpen(true)}if(e.key==="Escape"){setCommandOpen(false);setSelectedPostId(null)}};window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h)},[]);
 
-  const setRowsSafe = (updater: (prev: Row[]) => Row[]) => {
-    setRows(prev => { const next = updater(prev); rowsRef.current = next; return next; });
-  };
+  const persist=useCallback(async(id:string,patch:Partial<Row>)=>{savingIds.current.add(id);setSyncStatus("saving");setSyncError("");try{await dbPatch(id,patch);setSyncStatus("ok")}catch(e){setSyncStatus("error");setSyncError((e as Error).message);throw e}finally{savingIds.current.delete(id)}},[]);
+  const schedule=useCallback((id:string,patch:Partial<Row>,immediate=false)=>{pendingPatches.current.set(id,{...(pendingPatches.current.get(id)||{}),...patch});const old=pendingTimers.current.get(id);if(old)clearTimeout(old);const flush=async()=>{const p=pendingPatches.current.get(id);pendingPatches.current.delete(id);pendingTimers.current.delete(id);if(p)try{await persist(id,p)}catch{}};if(immediate){void flush()}else{setSyncStatus("saving");pendingTimers.current.set(id,setTimeout(()=>void flush(),650))}},[persist]);
 
-  const loadRows = useCallback(async (m: number, force = false) => {
-    if (!force) setLoading(true);
-    try {
-      const data = await dbLoad(m);
-      setRows(prev => {
-        const merged = data.map(sr => (pendingUpserts.current.has(sr.id) || savingIds.current.has(sr.id)) ? (prev.find(r => r.id === sr.id) ?? sr) : sr);
-        const serverIds = new Set(data.map(r => r.id));
-        const result = [...merged, ...prev.filter(r => !serverIds.has(r.id))];
-        rowsRef.current = result;
-        return result;
-      });
-    } catch { setSyncStatus("error"); }
-    finally { setLoading(false); }
-  }, []);
+  const updateRow=(id:string,key:keyof Row,val:any)=>{const current=rowsRef.current.find(r=>r.id===id);if(!current)return;const patch:Partial<Row>={[key]:val} as any;const historyKeys=(['status','data','rede','formato','responsavel'] as (keyof Row)[]);if(key==="data"){const iso=brToISO(String(val));patch.data_iso=iso;patch.mes=iso?Number(iso.slice(5,7))-1:current.mes}if(key==="formato"&&String(val)!==current.formato){patch.checklist=makeChecklist(String(val))}if(key==="status"&&val==="Publicado"&&current.status!=="Publicado"){patch.published_at=new Date().toISOString()}if(historyKeys.includes(key)&&String((current as any)[key]??"")!==String(val??"")){patch.historico=[...current.historico,makeHistory(String(key),(current as any)[key],val)]}setRowsSafe(prev=>prev.map(r=>r.id===id?{...r,...patch}:r));const immediate=['status','rede','formato','data','checklist','published_at'].includes(String(key));schedule(id,patch,immediate)};
+  const patchMany=async(ids:string[],patcher:(r:Row)=>Partial<Row>)=>{for(const id of ids){const r=rowsRef.current.find(x=>x.id===id);if(!r)continue;const patch=patcher(r);setRowsSafe(prev=>prev.map(x=>x.id===id?{...x,...patch}:x));schedule(id,patch,true)}};
+  const addAndOpen=async(partial:Partial<Row>={},dateISO="")=>{const row=makeRow(rowsRef.current.length+1,mes,dateISO,partial);setRowsSafe(p=>[...p,row]);setSyncStatus("saving");try{await dbUpsert(row);setSyncStatus("ok")}catch(e){setSyncStatus("error");setSyncError((e as Error).message)}setSelectedPostId(row.id);return row};
+  const createTemplate=async(t:TemplateDef)=>{setShowTemplates(false);await addAndOpen({postagem:t.label,tema:t.tema,rede:t.rede,formato:t.formato,checklist:makeChecklist(t.formato)})};
+  const createExtraTikTok=async(date=todayISO())=>addAndOpen({postagem:EXTRA_TIKTOK_FORMAT,tema:EXTRA_TIKTOK_FORMAT,rede:"TikTok",formato:EXTRA_TIKTOK_FORMAT,checklist:makeChecklist(EXTRA_TIKTOK_FORMAT)},date);
+  const generateRecurrence=async(days:number[],t:TemplateDef)=>{const year=new Date().getFullYear(),n=new Date(year,mes+1,0).getDate();const created:Row[]=[];for(let d=1;d<=n;d++){const dt=new Date(year,mes,d);if(days.includes(dt.getDay())){const iso=`${year}-${pad(mes+1)}-${pad(d)}`;created.push(makeRow(rowsRef.current.length+created.length+1,mes,iso,{postagem:t.label,tema:t.tema,rede:t.rede,formato:t.formato,checklist:makeChecklist(t.formato)}))}}setRowsSafe(p=>[...p,...created]);setShowRecurrence(false);setSyncStatus("saving");try{await dbUpsertMany(created);setSyncStatus("ok")}catch(e){setSyncStatus("error");setSyncError((e as Error).message)}};
+  const adapt=async(source:Row,network:string,format:string)=>{const row=makeRow(rowsRef.current.length+1,mes,"",{...source,id:undefined as any,postagem:`${source.postagem} · ${network}`,rede:network,formato:format,status:"Ideia",checklist:makeChecklist(format),historico:[makeHistory("adaptação",source.rede,network)],published_at:null,views:0,likes:0,shares:0,saves:0,followers_gained:0});setRowsSafe(p=>{const i=p.findIndex(r=>r.id===source.id);const next=[...p];next.splice(i+1,0,row);return next});setAdaptRow(null);await dbUpsert(row);setSelectedPostId(row.id)};
+  const movePost=(id:string,iso:string)=>updateRow(id,"data",isoToBR(iso));
+  const toggleChecklist=(id:string,itemId:string)=>{const r=rowsRef.current.find(x=>x.id===id);if(!r)return;const next=r.checklist.map(i=>i.id===itemId?{...i,done:!i.done}:i);const patch:Partial<Row>={checklist:next,historico:[...r.historico,makeHistory("checklist",`${r.checklist.filter(i=>i.done).length}/${r.checklist.length}`,`${next.filter(i=>i.done).length}/${next.length}`)]};setRowsSafe(p=>p.map(x=>x.id===id?{...x,...patch}:x));schedule(id,patch,true)};
+  const finalizeUndo=async()=>{if(!undo)return;const ids=undo.rows.map(r=>r.id);setUndo(null);if(undoTimer.current){clearTimeout(undoTimer.current);undoTimer.current=null}for(const id of ids)try{await dbDelete(id)}catch(e){setSyncError((e as Error).message);setSyncStatus("error")}};
+  const removeRows=(ids:string[])=>{if(undo)void finalizeUndo();const current=rowsRef.current;const pack=ids.map(id=>({row:current.find(r=>r.id===id),index:current.findIndex(r=>r.id===id)})).filter(x=>x.row) as {row:Row;index:number}[];pack.forEach(x=>{const t=pendingTimers.current.get(x.row.id);if(t)clearTimeout(t);pendingTimers.current.delete(x.row.id);pendingPatches.current.delete(x.row.id)});setRowsSafe(p=>p.filter(r=>!ids.includes(r.id)));setSelectedIds(new Set());setSelectedPostId(p=>p&&ids.includes(p)?null:p);setUndo({rows:pack.map(x=>x.row),indexes:pack.map(x=>x.index)});undoTimer.current=setTimeout(()=>{pack.forEach(x=>dbDelete(x.row.id).catch(e=>{setSyncError((e as Error).message);setSyncStatus("error")}));setUndo(null)},6500)};
+  const undoDelete=()=>{if(!undo)return;if(undoTimer.current)clearTimeout(undoTimer.current);const items=undo.rows.map((row,i)=>({row,index:undo.indexes[i]})).sort((a,b)=>a.index-b.index);setRowsSafe(prev=>{const next=[...prev];items.forEach(({row,index})=>next.splice(Math.min(index,next.length),0,row));return next});setUndo(null)};
 
-  useEffect(() => { setSelectedDay(null); loadRows(mes); }, [mes, loadRows]);
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const tag = document.activeElement?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      loadRows(mes, true);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [mes, loadRows]);
+  const filtered=rows.filter(r=>{if(filterStatus!=="Todos"&&r.status!==filterStatus)return false;if(filterRede!=="Todos"&&r.rede!==filterRede&&r.rede!=="Todos")return false;const q=search.toLowerCase();return !q||[r.postagem,r.tema,r.hook,r.roteiro,r.responsavel,r.formato,r.rede].some(v=>v?.toLowerCase().includes(q))}).sort((a,b)=>{const da=dateInputValue(a),db=dateInputValue(b);if(!da&&!db)return 0;if(!da)return 1;if(!db)return-1;return da.localeCompare(db)});
+  const selectedPost=rows.find(r=>r.id===selectedPostId)||null;
+  const syncColor=syncStatus==="error"?"#f87171":syncStatus==="saving"?"#c084fc":"#6ee7b7";
+  const openExternalPost=(r:Row)=>{if(r.mes!==mes)setMes(r.mes);setAppTab("conteudo");setSelectedPostId(r.id)};
+  const nav:[AppTab,string,string][]=[["hoje","☀","Hoje"],["conteudo","📅","Conteúdo"],["produtividade","📈","Produtividade"],["leads","👥","Leads"],["influencers","🔗","Influencers"]];
+  const selectedArray=[...selectedIds];
 
-  const persistPatch = useCallback(async (id: string, patch: Partial<Row>) => {
-    savingIds.current.add(id);
-    setSyncStatus("saving");
-    setSyncError("");
-    try {
-      await dbPatch(id, patch);
-      setSyncStatus("ok");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error("Falha ao salvar postagem", { id, patch, err });
-      setSyncError(message);
-      setSyncStatus("error");
-      throw err;
-    } finally {
-      savingIds.current.delete(id);
-    }
-  }, []);
+  return <div className="cxp-shell"><div className="cxp-wrap"><header style={{display:"flex",alignItems:"center",gap:12,paddingBottom:12,borderBottom:"1px solid #3d246f",marginBottom:14,flexWrap:"wrap"}}><img src="/icons/criandoxp.png" alt="Criando XP" style={{width:52,height:52,objectFit:"contain"}}/><div style={{flex:1,minWidth:170}}><div className="cxp-title" style={{fontSize:20,color:"#e9d5ff"}}>Criando XP</div><div className="cxp-muted" style={{font:"700 8px 'Cinzel',serif",letterSpacing:2}}>CENTRAL OPERACIONAL DE CONTEÚDO</div></div><span title={syncError||undefined} style={{fontSize:10,color:syncColor,animation:syncStatus==="saving"?"blink 1s infinite":"none"}}>{syncStatus==="saving"?"Salvando…":syncStatus==="error"?"⚠ Erro":"✓ Sync"}</span><button className="cxp-btn" onClick={()=>setCommandOpen(true)}>⌘K Buscar</button><button className="cxp-btn primary" onClick={()=>setCommandOpen(true)}>＋</button><button className="cxp-btn" onClick={onVoltar}>Sair</button></header><div className="cxp-nav" style={{marginBottom:15}}>{nav.map(([tab,icon,label])=><button key={tab} onClick={()=>setAppTab(tab)} className={`cxp-btn ${appTab===tab?"primary":""}`}>{icon} {!isMobile&&label}</button>)}</div>
 
-  const schedulePatch = useCallback((id: string, patch: Partial<Row>, immediate = false) => {
-    const previousPatch = pendingPatches.current.get(id) ?? {};
-    pendingPatches.current.set(id, { ...previousPatch, ...patch });
-
-    const existing = pendingUpserts.current.get(id);
-    if (existing) clearTimeout(existing);
-
-    const flush = async () => {
-      const nextPatch = pendingPatches.current.get(id);
-      pendingPatches.current.delete(id);
-      pendingUpserts.current.delete(id);
-      if (!nextPatch || Object.keys(nextPatch).length === 0) return;
-      try { await persistPatch(id, nextPatch); } catch { /* erro já refletido na UI */ }
-    };
-
-    if (immediate) {
-      void flush();
-      return;
-    }
-
-    setSyncStatus("saving");
-    const timer = setTimeout(() => { void flush(); }, 650);
-    pendingUpserts.current.set(id, timer);
-  }, [persistPatch]);
-
-  const updateRow = (id: string, key: keyof Row, val: string) => {
-    const current = rowsRef.current.find(r => r.id === id);
-    if (!current) return;
-
-    const patch: Partial<Row> = { [key]: val } as Partial<Row>;
-    if (key === "data") {
-      const d = parseDateBR(val);
-      if (d) patch.mes = d.getMonth();
-    }
-
-    setRowsSafe(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
-
-    const immediate = key === "status" || key === "rede" || key === "formato";
-    schedulePatch(id, patch, immediate);
-  };
-
-  const addRow = async () => {
-    const row = makeRow(rowsRef.current.length + 1, mes);
-    setRowsSafe(prev => [...prev, row]);
-    setSyncStatus("saving");
-    try { await dbUpsert(row); setSyncStatus("ok"); }
-    catch (err) { setSyncError(err instanceof Error ? err.message : String(err)); setSyncStatus("error"); }
-  };
-
-  const addExtraTikTok = async () => {
-    const row: Row = {
-      ...makeRow(rowsRef.current.length + 1, mes),
-      postagem: EXTRA_TIKTOK_FORMAT,
-      tema: EXTRA_TIKTOK_FORMAT,
-      formato: EXTRA_TIKTOK_FORMAT,
-      rede: "TikTok",
-      status: "Planejado",
-    };
-    setRowsSafe(prev => [...prev, row]);
-    setSyncStatus("saving");
-    try { await dbUpsert(row); setSyncStatus("ok"); }
-    catch (err) { setSyncError(err instanceof Error ? err.message : String(err)); setSyncStatus("error"); }
-  };
-
-  const duplicateRow = async (source: Row) => {
-    const row: Row = { ...source, id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, postagem: `${source.postagem} (cópia)`, status: "Planejado" };
-    setRowsSafe(prev => { const idx = prev.findIndex(r => r.id === source.id); const next = [...prev]; next.splice(idx+1, 0, row); return next; });
-    try { await dbUpsert(row); } catch { setSyncStatus("error"); }
-  };
-
-  const removeRow = async (id: string) => {
-    const pending = pendingUpserts.current.get(id);
-    if (pending) { clearTimeout(pending); pendingUpserts.current.delete(id); }
-    pendingPatches.current.delete(id);
-    setRowsSafe(prev => prev.filter(r => r.id !== id));
-    try { await dbDelete(id); setSyncStatus("ok"); }
-    catch (err) { setSyncError(err instanceof Error ? err.message : String(err)); setSyncStatus("error"); }
-  };
-
-  const movePost = (rowId: string, newDateStr: string) => {
-    const current = rowsRef.current.find(r => r.id === rowId);
-    if (!current) return;
-    const d = parseDateBR(newDateStr);
-    const patch: Partial<Row> = { data: newDateStr, mes: d ? d.getMonth() : current.mes };
-    setRowsSafe(prev => prev.map(r => r.id === rowId ? { ...r, ...patch } : r));
-    schedulePatch(rowId, patch, true);
-  };
-
-  const dInicio = parseDateBR(filterDataInicio);
-  const dFim    = parseDateBR(filterDataFim);
-  const filtered = rows
-    .filter(r => {
-      if (filter !== "Todos" && r.status !== filter) return false;
-      if (filterRede !== "Todos" && r.rede !== filterRede && r.rede !== "Todos") return false;
-      const d = parseDateBR(r.data);
-      if (dInicio && (!d || d < dInicio)) return false;
-      if (dFim    && (!d || d > dFim))   return false;
-      return true;
-    })
-    .sort((a, b) => { const da = parseDateBR(a.data); const db = parseDateBR(b.data); if (!da && !db) return 0; if (!da) return 1; if (!db) return -1; return da.getTime() - db.getTime(); });
-
-  const urgentCount = rows.filter(r => getUrgency(r.data, r.status) !== null).length;
-  const syncColor   = syncStatus === "saving" ? "#c084fc" : syncStatus === "error" ? "#f87171" : "#6ee7b7";
-  const syncLabel   = syncStatus === "saving" ? "Salvando..." : syncStatus === "error" ? "⚠ Erro" : "✓ Sync";
-  const selectStyle: React.CSSProperties = { background: "#1a0d3a", color: "#c9a0f5", border: "1px solid #4a2a8a", borderRadius: 8, padding: "9px 10px", fontFamily: "'Cinzel', serif", fontSize: 13, cursor: "pointer", outline: "none", width: "100%" };
-
-  return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#0d0720 0%,#1a0d3a 40%,#0d0720 100%)", color: "#e2d0ff", padding: isMobile ? "14px 10px" : "24px 16px" }}>
-
-      {/* HEADER */}
-      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 20, marginBottom: 18, borderBottom: "2px solid #4a2a8a", paddingBottom: 14, flexWrap: "wrap" }}>
-        <div style={{ width: isMobile ? 48 : 80, height: isMobile ? 48 : 80, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#c084fc)", display: "flex", alignItems: "center", justifyContent: "center", animation: "float 4s ease-in-out infinite", flexShrink: 0 }}>
-  <img src="/icons/criandoxp.png" alt="Criando XP" style={{ width: isMobile ? 32 : 52, height: isMobile ? 32 : 52, objectFit: "contain" }} />
-</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: "'Cinzel', serif", fontSize: isMobile ? 18 : 24, fontWeight: 900, background: "linear-gradient(90deg,#c084fc,#818cf8,#a855f7)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: 2 }}>Criando XP</div>
-          <div style={{ fontFamily: "'Cinzel', serif", fontSize: 9, color: "#7c3aed", letterSpacing: 3, textTransform: "uppercase" }}>
-          {appTab === "calendario" ? "Calendário de Postagem" : appTab === "leads" ? "Leads & Clientes" : "Influencers & Links"}          </div>
-        </div>
-        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-end" : "center", gap: 8, width: isMobile ? "100%" : "auto" }}>
-          {appTab === "calendario" && urgentCount > 0 && (
-            <span style={{ background: "#ef4444", color: "#fff", borderRadius: 20, padding: "4px 10px", fontSize: 11, fontFamily: "'Cinzel', serif", animation: "pulse-red 1s ease-in-out infinite" }}>⚡ {urgentCount} urgente{urgentCount > 1 ? "s" : ""}</span>
-          )}
-          {appTab === "calendario" && <span title={syncError || undefined} style={{ fontSize: 10, color: syncColor, animation: syncStatus === "saving" ? "blink 1s infinite" : "none" }}>{syncLabel}</span>}
-          <button onClick={onVoltar} style={{ background: "transparent", border: "1px solid #4a2a8a", color: "#7c3aed", borderRadius: 8, padding: "6px 14px", fontFamily: "'Cinzel', serif", fontSize: 11, cursor: "pointer", letterSpacing: 1 }}>← Voltar</button>
-          <div style={{ display: "flex", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, overflow: "hidden", width: isMobile ? "100%" : "auto" }}>
-          {([["calendario","📅"], ["leads","👥"], ["influencers","🔗"]] as [AppTab,string][]).map(([tab, icon]) => (
-              <button key={tab} onClick={() => setAppTab(tab)}
-                style={{ flex: isMobile ? 1 : undefined, background: appTab === tab ? "linear-gradient(135deg,#4a2a8a,#7c3aed)" : "transparent", color: appTab === tab ? "#fff" : "#5a3a8a", border: "none", padding: isMobile ? "10px 0" : "8px 14px", fontFamily: "'Cinzel', serif", fontSize: isMobile ? 12 : 11, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>
-                {icon}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* CALENDÁRIO */}
-      {appTab === "calendario" && (
-        <>
-          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-            <select value={mes} onChange={e => setMes(Number(e.target.value))} style={selectStyle}>{MONTHS.map((m,i) => <option key={m} value={i}>{m}</option>)}</select>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, flex: 1 }}>
-              <select value={filterRede} onChange={e => setFilterRede(e.target.value)} style={selectStyle}><option value="Todos">Todas as Redes</option>{REDE_OPTIONS.map(r => <option key={r}>{r}</option>)}</select>
-              <select value={filter} onChange={e => setFilter(e.target.value)} style={selectStyle}><option value="Todos">Todos os Status</option>{STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}</select>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => loadRows(mes)} style={{ background: "#1a0d3a", color: "#c084fc", border: "1px solid #4a2a8a", borderRadius: 8, padding: "9px 14px", fontFamily: "'Cinzel', serif", fontSize: 12, cursor: "pointer" }}>⟳</button>
-              <div style={{ display: "flex", background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, overflow: "hidden" }}>
-                {(["tabela","calendario"] as ViewMode[]).map(mode => (
-                  <button key={mode} onClick={() => { setViewMode(mode); setSelectedDay(null); }}
-                    style={{ background: viewMode === mode ? "linear-gradient(135deg,#4a2a8a,#7c3aed)" : "transparent", color: viewMode === mode ? "#fff" : "#5a3a8a", border: "none", padding: "9px 14px", fontFamily: "'Cinzel', serif", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                    {mode === "tabela" ? "≡ Tabela" : "🗓 Cal"}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Filtro data */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#0d0720", border: "1px solid #4a2a8a", borderRadius: 10, padding: "6px 10px", marginBottom: 16, flexWrap: "wrap" }}>
-            <span style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a" }}>📅 De</span>
-            <input type="text" value={filterDataInicio} onChange={e => setFilterDataInicio(e.target.value)} placeholder="dd/mm/aaaa" style={{ background: "transparent", border: "none", color: "#c9a0f5", fontFamily: "'Cinzel', serif", fontSize: 12, outline: "none", width: 100 }} />
-            <span style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#5a3a8a" }}>até</span>
-            <input type="text" value={filterDataFim} onChange={e => setFilterDataFim(e.target.value)} placeholder="dd/mm/aaaa" style={{ background: "transparent", border: "none", color: "#c9a0f5", fontFamily: "'Cinzel', serif", fontSize: 12, outline: "none", width: 100 }} />
-            {(filterDataInicio || filterDataFim) && <button onClick={() => { setFilterDataInicio(""); setFilterDataFim(""); }} style={{ background: "none", border: "none", color: "#5a3a8a", cursor: "pointer", fontSize: 16 }}>✕</button>}
-          </div>
-
-          {/* Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(6,1fr)", gap: 8, marginBottom: 18 }}>
-            {STATUS_OPTIONS.map(s => {
-              const c = STATUS_COLORS[s];
-              return <div key={s} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 10, padding: isMobile ? "8px 6px" : "8px 16px", textAlign: "center" }}>
-                <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 900, color: c.text, fontFamily: "'Cinzel', serif" }}>{rows.filter(r => r.status === s).length}</div>
-                <div style={{ fontSize: isMobile ? 8 : 10, color: c.text, opacity: 0.8 }}>{s}</div>
-              </div>;
-            })}
-            <div style={{ background: "#1a0d3a", border: "1px solid #4a2a8a", borderRadius: 10, padding: isMobile ? "8px 6px" : "8px 16px", textAlign: "center" }}>
-              <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 900, color: "#c084fc", fontFamily: "'Cinzel', serif" }}>{rows.length}</div>
-              <div style={{ fontSize: isMobile ? 8 : 10, color: "#c084fc", opacity: 0.8 }}>Total</div>
-            </div>
-          </div>
-
-          {/* Calendário */}
-          {viewMode === "calendario" && (
-            <div>
-              <div style={{ borderRadius: 16, border: "1px solid #4a2a8a", padding: isMobile ? "10px 8px" : "16px", background: "#0d072088", position: "relative" }}>
-                {loading && <div style={{ position: "absolute", inset: 0, background: "#0d072099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 16 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-                <CalendarView rows={filtered} mes={mes} onSelectDay={(r, d) => setSelectedDay(prev => prev?.day === d ? null : { day: d, rows: r })} isMobile={isMobile} onMovePost={movePost} />              </div>
-              {selectedDay && <DayPanel day={selectedDay.day} mes={mes} rows={selectedDay.rows} onClose={() => setSelectedDay(null)} isMobile={isMobile} />}
-              <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-                <button onClick={addRow} style={{ background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, cursor: "pointer", flex: isMobile ? "1 1 100%" : undefined }}>+ Adicionar Postagem</button>
-                <button onClick={addExtraTikTok} style={{ background: "#120925", color: "#f0abfc", border: "1px solid #a855f7", borderRadius: 10, padding: "12px 20px", fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700, cursor: "pointer", flex: isMobile ? "1 1 100%" : undefined }}>+ Vídeo extra TikTok</button>
-              </div>
-            </div>
-          )}
-
-
-
-{/* Tabela */}
-{viewMode === "tabela" && (
-  <>
-    {isMobile ? (
-      <div style={{ position: "relative" }}>
-        {loading && <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><div style={{ width: 32, height: 32, border: "3px solid #4a2a8a", borderTop: "3px solid #c084fc", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /></div>}
-        {!loading && filtered.length === 0 && <div style={{ padding: 40, textAlign: "center", color: "#5a3a8a", fontFamily: "'Cinzel',serif", fontSize: 13 }}>{rows.length === 0 ? "Nenhuma postagem ainda." : "Nenhuma com esse filtro."}</div>}
-        {filtered.map((row, idx) => <PostagemCard key={row.id} row={row} idx={idx} onUpdate={updateRow} onDuplicate={duplicateRow} onRemove={removeRow} />)}
-      </div>
-    ) : (
-      <TableWithDrag
-        filtered={filtered}
-        loading={loading}
-        rows={rows}
-        updateRow={updateRow}
-        duplicateRow={duplicateRow}
-        removeRow={removeRow}
-        onReorder={(fromId, toId) => {
-          setRowsSafe(prev => {
-            const next = [...prev];
-            const fromIdx = next.findIndex(r => r.id === fromId);
-            const toIdx   = next.findIndex(r => r.id === toId);
-            if (fromIdx < 0 || toIdx < 0) return prev;
-            const [moved] = next.splice(fromIdx, 1);
-            next.splice(toIdx, 0, moved);
-            return next;
-          });
-        }}
-      />
-    )}
-    <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-      <button onClick={addRow} style={{ background: "linear-gradient(135deg,#4a2a8a,#7c3aed)", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontFamily: "'Cinzel',serif", fontSize: 13, fontWeight: 700, cursor: "pointer", flex: isMobile ? "1 1 100%" : undefined }}>+ Adicionar Postagem</button>
-      <button onClick={addExtraTikTok} style={{ background: "#120925", color: "#f0abfc", border: "1px solid #a855f7", borderRadius: 10, padding: "12px 20px", fontFamily: "'Cinzel',serif", fontSize: 12, fontWeight: 700, cursor: "pointer", flex: isMobile ? "1 1 100%" : undefined }}>+ Vídeo extra TikTok</button>
-    </div>
-  </>
-)}
-        </>
-      )}
-
-      {appTab === "leads"   && <LeadsView   isMobile={isMobile} />}
-      {appTab === "influencers" && <InfluencersView isMobile={isMobile} />}
-
-      <div style={{ marginTop: 36, textAlign: "center", color: "#3d1b69", fontSize: 10, fontFamily: "'Cinzel', serif", letterSpacing: 2 }}>
-        🎲 CRIANDO XP · DASHBOARD INTERNO
-      </div>
-    </div>
-  );
+  {appTab==="hoje"&&<TodayCenter rows={centralRows} leads={centralLeads} loading={centralLoading} onOpenPost={openExternalPost} onGoContent={()=>setAppTab("conteudo")} onGoLeads={()=>setAppTab("leads")}/>} 
+  {appTab==="conteudo"&&<div><SectionTitle eyebrow="Planejamento editorial" right={<div style={{display:"flex",gap:6,flexWrap:"wrap"}}><button className="cxp-btn" onClick={()=>setShowTemplates(true)}>Modelos</button><button className="cxp-btn" onClick={()=>setShowRecurrence(true)}>Recorrência</button><button className="cxp-btn primary" onClick={()=>void addAndOpen()}>＋ Postagem</button><button className="cxp-btn" onClick={()=>void createExtraTikTok("")}>🎵 Extra TikTok</button></div>}>Conteúdo · {MONTHS[mes]}</SectionTitle><div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:10}}><select className="cxp-input" style={{width:isMobile?"100%":150}} value={mes} onChange={e=>setMes(Number(e.target.value))}>{MONTHS.map((m,i)=><option value={i} key={m}>{m}</option>)}</select><input className="cxp-input" style={{flex:1,minWidth:190}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar tema, hook, responsável…"/><select className="cxp-input" style={{width:160}} value={filterRede} onChange={e=>setFilterRede(e.target.value)}><option>Todos</option>{REDE_OPTIONS.filter(r=>r!=="Todos").map(r=><option key={r}>{r}</option>)}</select><select className="cxp-input" style={{width:160}} value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}><option>Todos</option>{STATUS_OPTIONS.map(s=><option key={s}>{s}</option>)}</select><button className="cxp-btn" onClick={()=>loadRows(mes)}>⟳</button></div><div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>{(["tabela","calendario","kanban"] as ViewMode[]).map(v=><button key={v} className={`cxp-chip ${viewMode===v?"active":""}`} onClick={()=>setViewMode(v)}>{v==="tabela"?"≡ Tabela":v==="calendario"?"🗓 Calendário":"▥ Kanban"}</button>)}{viewMode==="calendario"&&<>{(["mes","semana"] as CalendarScope[]).map(v=><button key={v} className={`cxp-chip ${calendarScope===v?"active":""}`} onClick={()=>setCalendarScope(v)}>{v==="mes"?"Mês":"Semana"}</button>)}</>}</div>{viewMode==="calendario"&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}><span className="cxp-muted" style={{fontSize:10,alignSelf:"center",marginRight:2}}>Rede rápida:</span><button className={`cxp-chip ${filterRede==="Todos"?"active":""}`} onClick={()=>setFilterRede("Todos")}>Todas</button>{REDE_OPTIONS.filter(r=>r!=="Todos").map(r=><button key={r} className={`cxp-chip ${filterRede===r?"active":""}`} onClick={()=>setFilterRede(r)}>{REDE_ICONS[r]} {r}</button>)}</div>}{selectedIds.size>0&&<BulkBar count={selectedIds.size} onStatus={s=>void patchMany(selectedArray,r=>({status:s,historico:[...r.historico,makeHistory("status",r.status,s)],...(s==="Publicado"&&r.status!=="Publicado"?{published_at:new Date().toISOString()}:{})}))} onResponsavel={v=>void patchMany(selectedArray,r=>({responsavel:v,historico:[...r.historico,makeHistory("responsavel",r.responsavel,v)]}))} onDate={iso=>void patchMany(selectedArray,r=>({data:isoToBR(iso),data_iso:iso,mes:Number(iso.slice(5,7))-1,historico:[...r.historico,makeHistory("data",r.data,isoToBR(iso))]}))} onPublish={()=>void patchMany(selectedArray,r=>({status:"Publicado",published_at:r.published_at||new Date().toISOString(),historico:[...r.historico,makeHistory("status",r.status,"Publicado")]}))} onDuplicate={async()=>{const copies=selectedArray.map(id=>rowsRef.current.find(r=>r.id===id)).filter(Boolean).map((r:any)=>makeRow(rowsRef.current.length+1,mes,"",{...r,postagem:`${r.postagem} (cópia)`,status:"Ideia",published_at:null,views:0,likes:0,shares:0,saves:0,followers_gained:0,historico:[makeHistory("duplicação",r.id,"nova cópia")]}));setRowsSafe(p=>[...p,...copies]);await dbUpsertMany(copies);setSelectedIds(new Set())}} onDelete={()=>removeRows(selectedArray)} onClear={()=>setSelectedIds(new Set())}/>} {loading?<div style={{padding:60,display:"flex",justifyContent:"center"}}><Spinner/></div>:viewMode==="tabela"?(isMobile?<MobileContentCards rows={filtered} selected={selectedIds} onSelect={id=>setSelectedIds(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);return n})} onSelectAll={()=>{}} onOpen={r=>setSelectedPostId(r.id)} onUpdate={updateRow} onAdapt={setAdaptRow} onRemove={id=>removeRows([id])}/>:<ContentTable rows={filtered} selected={selectedIds} onSelect={id=>setSelectedIds(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);return n})} onSelectAll={()=>setSelectedIds(p=>filtered.length&&filtered.every(r=>p.has(r.id))?new Set():new Set(filtered.map(r=>r.id)))} onOpen={r=>setSelectedPostId(r.id)} onUpdate={updateRow} onAdapt={setAdaptRow} onRemove={id=>removeRows([id])}/>):viewMode==="kanban"?<KanbanView rows={filtered} onOpen={r=>setSelectedPostId(r.id)} onStatus={(id,s)=>updateRow(id,"status",s)}/>:<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"240px 1fr",gap:10,alignItems:"start"}}>{!isMobile&&<Backlog rows={rows} onOpen={r=>setSelectedPostId(r.id)} onAdd={()=>void addAndOpen()}/>}<div className="cxp-card" style={{padding:10}}><CalendarBoard rows={filtered} mes={mes} scope={calendarScope} weekIndex={weekIndex} onWeekIndex={setWeekIndex} onMovePost={movePost} onOpen={r=>setSelectedPostId(r.id)} onCreateForDay={iso=>void addAndOpen({},iso)}/></div>{isMobile&&<Backlog rows={rows} onOpen={r=>setSelectedPostId(r.id)} onAdd={()=>void addAndOpen()}/>}</div>}</div>}
+  {appTab==="produtividade"&&<><div style={{display:"flex",gap:7,marginBottom:10}}><select className="cxp-input" style={{width:160}} value={mes} onChange={e=>setMes(Number(e.target.value))}>{MONTHS.map((m,i)=><option value={i} key={m}>{m}</option>)}</select></div><ProductivityView rows={rows}/></>}
+  {appTab==="leads"&&<LeadsView isMobile={isMobile} openNewNonce={leadNewNonce}/>} {appTab==="influencers"&&<InfluencersView isMobile={isMobile}/>} 
+  </div>{selectedPost&&<PostDrawer row={selectedPost} onClose={()=>setSelectedPostId(null)} onUpdate={updateRow} onToggleChecklist={toggleChecklist} onAdapt={setAdaptRow} onRemove={id=>removeRows([id])}/>} {showTemplates&&<TemplateModal onClose={()=>setShowTemplates(false)} onCreate={createTemplate}/>} {showRecurrence&&<RecurrenceModal mes={mes} onClose={()=>setShowRecurrence(false)} onGenerate={generateRecurrence}/>} {adaptRow&&<AdaptModal row={adaptRow} onClose={()=>setAdaptRow(null)} onCreate={(network,format)=>void adapt(adaptRow,network,format)}/>} {undo&&<div className="cxp-toast"><span>{undo.rows.length===1?"Postagem excluída":`${undo.rows.length} postagens excluídas`}</span><button className="cxp-btn" onClick={undoDelete}>DESFAZER</button></div>} <CommandPalette open={commandOpen} onClose={()=>setCommandOpen(false)} onNewPost={()=>void addAndOpen()} onExtraTikTok={()=>void createExtraTikTok(todayISO())} onToday={()=>setAppTab("hoje")} onLeads={()=>{setAppTab("leads");setLeadNewNonce(n=>n+1)}} onInfluencers={()=>setAppTab("influencers")} onOpenPost={openExternalPost}/></div>;
 }
 
-// ─── App Root ──────────────────────────────────────────────────────────────
-
+// ─── App ───────────────────────────────────────────────────────────────────
 export default function App() {
-  const [page, setPage] = useState<AppPage>("landing");
-  const [autenticado, setAutenticado] = useState(false);
-  const [checandoSessao, setCheckandoSessao] = useState(true);
-const EMAIL_LOGIN = "giovannihilario@hotmail.com"; // troca pelo email que você cadastrou no Supabase Auth
-  const [senhaInput, setSenhaInput] = useState("");
-  const [erroSenha, setErroSenha] = useState("");
-  const [entrando, setEntrando] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setAutenticado(!!session);
-      setCheckandoSessao(false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAutenticado(!!session);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const tentarEntrar = async () => {
-    setEntrando(true);
-    setErroSenha("");
-const { error } = await supabase.auth.signInWithPassword({ email: EMAIL_LOGIN, password: senhaInput });    setEntrando(false);
-    if (error) setErroSenha("Email ou senha incorretos.");
-  };
-
-  const sair = async () => {
-    await supabase.auth.signOut();
-    setPage("landing");
-  };
-
-  const telaSenha = (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#0d0720,#1a0d3a)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "#110828", border: "1px solid #4a2a8a", borderRadius: 16, padding: "40px 32px", textAlign: "center", width: "100%", maxWidth: 360 }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🔐</div>
-        <div style={{ fontFamily: "'Cinzel', serif", fontSize: 18, fontWeight: 900, color: "#c084fc", marginBottom: 8 }}>Área Restrita</div>
-        <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 13, color: "#5a3a8a", marginBottom: 24 }}>Criando XP · Dashboard Interno</div>
-        <input
-          type="password"
-          value={senhaInput}
-          onChange={e => { setSenhaInput(e.target.value); setErroSenha(""); }}
-          onKeyDown={e => e.key === "Enter" && tentarEntrar()}
-          placeholder="Senha"
-          style={{ width: "100%", background: "#0d0720", border: `1px solid ${erroSenha ? "#ef4444" : "#4a2a8a"}`, borderRadius: 10, color: "#e2d0ff", fontFamily: "'Lato', sans-serif", fontSize: 15, padding: "12px 16px", outline: "none", marginBottom: 8, boxSizing: "border-box" as const }}
-        />
-        {erroSenha && <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 12, color: "#fca5a5", marginBottom: 12 }}>{erroSenha}</div>}
-        <button onClick={tentarEntrar} disabled={entrando} style={{ width: "100%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 700, cursor: entrando ? "default" : "pointer", marginTop: 8, opacity: entrando ? 0.6 : 1 }}>
-          {entrando ? "Entrando..." : "Entrar"}
-        </button>
-      </div>
-    </div>
-  );
-
-  if (checandoSessao) return null;
-
-  return (
-    <>
-      <style>{GLOBAL_CSS}</style>
-      {page === "landing"
-        ? <LandingPage onAbrirDashboard={() => setPage("dashboard")} />
-        : autenticado
-          ? <Dashboard onVoltar={sair} />
-          : telaSenha
-      }
-    </>
-  );
+  const [page,setPage]=useState<AppPage>("landing"),[autenticado,setAutenticado]=useState(false),[checando,setChecando]=useState(true),[senha,setSenha]=useState(""),[erro,setErro]=useState(""),[entrando,setEntrando]=useState(false);
+  const EMAIL_LOGIN="giovannihilario@hotmail.com";
+  useEffect(()=>{supabase.auth.getSession().then(({data:{session}})=>{setAutenticado(!!session);setChecando(false)});const{data:{subscription}}=supabase.auth.onAuthStateChange((_e,session)=>setAutenticado(!!session));return()=>subscription.unsubscribe()},[]);
+  const entrar=async()=>{setEntrando(true);setErro("");const{error}=await supabase.auth.signInWithPassword({email:EMAIL_LOGIN,password:senha});setEntrando(false);if(error)setErro("Email ou senha incorretos.")};
+  const sair=async()=>{await supabase.auth.signOut();setPage("landing")};
+  if(checando)return null;
+  const login=<div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0d0720,#1a0d3a)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}><div style={{width:"min(360px,100%)",background:"#100722",border:"1px solid #4a2a8a",borderRadius:16,padding:28,textAlign:"center"}}><img src="/icons/criandoxp.png" alt="" style={{width:64,height:64,objectFit:"contain",marginBottom:12}}/><div style={{font:"900 17px 'Cinzel',serif",color:"#c084fc",marginBottom:6}}>Área Restrita</div><div style={{font:"12px 'Lato',sans-serif",color:"#6f5a95",marginBottom:18}}>Criando XP · Central Operacional</div><input type="password" value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==="Enter"&&entrar()} placeholder="Senha" style={{...inputStyle,padding:12,fontSize:14}}/>{erro&&<div style={{color:"#fca5a5",fontSize:11,marginTop:7}}>{erro}</div>}<button onClick={entrar} disabled={entrando} style={{width:"100%",marginTop:10,background:"linear-gradient(135deg,#6d28d9,#9333ea)",color:"#fff",border:0,borderRadius:9,padding:12,font:"700 12px 'Cinzel',serif",cursor:"pointer",opacity:entrando?.6:1}}>{entrando?"Entrando…":"Entrar"}</button></div></div>;
+  return <><style>{GLOBAL_CSS}</style>{page==="landing"?<LandingPage onAbrirDashboard={()=>setPage("dashboard")}/>:autenticado?<Dashboard onVoltar={sair}/>:login}</>;
 }
