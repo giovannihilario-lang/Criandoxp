@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import { createClient } from "@supabase/supabase-js";
 import LandingPage from "./LandingPage";
 import mayoouImg from "../public/icons/mayoou.png";
@@ -122,13 +122,13 @@ const REDE_ICONS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<Status, { bg: string; text: string; border: string; rowBg: string; calBg: string }> = {
-  Ideia:      { bg: "#32204f", text: "#d8b4fe", border: "#7e22ce", rowBg: "rgba(126,34,206,.12)", calBg: "#4c1d95dd" },
-  Roteiro:    { bg: "#2a2659", text: "#c4b5fd", border: "#6366f1", rowBg: "rgba(99,102,241,.12)", calBg: "#3730a3dd" },
-  Produção:   { bg: "#1f3155", text: "#93c5fd", border: "#3b82f6", rowBg: "rgba(59,130,246,.12)", calBg: "#1d4ed8dd" },
-  Edição:     { bg: "#27364a", text: "#67e8f9", border: "#0891b2", rowBg: "rgba(8,145,178,.12)", calBg: "#0e7490dd" },
-  Agendado:   { bg: "#163b38", text: "#6ee7b7", border: "#10b981", rowBg: "rgba(16,185,129,.11)", calBg: "#047857dd" },
-  Publicado:  { bg: "#19391f", text: "#86efac", border: "#16a34a", rowBg: "rgba(22,163,74,.11)", calBg: "#15803ddd" },
-  Cancelado:  { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626", rowBg: "rgba(220,38,38,.09)", calBg: "#991b1bdd" },
+  "Ideia":      { bg: "#32204f", text: "#d8b4fe", border: "#7e22ce", rowBg: "rgba(126,34,206,.12)", calBg: "#4c1d95dd" },
+  "Roteiro":    { bg: "#2a2659", text: "#c4b5fd", border: "#6366f1", rowBg: "rgba(99,102,241,.12)", calBg: "#3730a3dd" },
+  "Produção":   { bg: "#1f3155", text: "#93c5fd", border: "#3b82f6", rowBg: "rgba(59,130,246,.12)", calBg: "#1d4ed8dd" },
+  "Edição":     { bg: "#27364a", text: "#67e8f9", border: "#0891b2", rowBg: "rgba(8,145,178,.12)", calBg: "#0e7490dd" },
+  "Agendado":   { bg: "#163b38", text: "#6ee7b7", border: "#10b981", rowBg: "rgba(16,185,129,.11)", calBg: "#047857dd" },
+  "Publicado":  { bg: "#19391f", text: "#86efac", border: "#16a34a", rowBg: "rgba(22,163,74,.11)", calBg: "#15803ddd" },
+  "Cancelado":  { bg: "#3a1a1a", text: "#fca5a5", border: "#dc2626", rowBg: "rgba(220,38,38,.09)", calBg: "#991b1bdd" },
 };
 
 const TEMPLATES: TemplateDef[] = [
@@ -221,7 +221,6 @@ function normalizeRow(raw: any): Row {
     followers_gained: Number(raw.followers_gained || 0), published_at: raw.published_at || null, created_at: raw.created_at,
   };
 }
-function driveFileId(url: string): string | null { return url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ?? null; }
 function humanDateTime(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
