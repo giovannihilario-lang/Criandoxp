@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties, type ReactNode, type DragEvent, type FormEvent } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties, type ReactNode, type DragEvent, type FormEvent } from "react";
 import LandingPage from "./LandingPage";
 import OnboardingTour, { getBrowserActorName, setBrowserActorName, ONBOARDING_VERSION, type TourStep } from "./components/Onboarding";
 import { supabase } from "./lib/supabase";
