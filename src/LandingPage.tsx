@@ -1,9 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type CSSProperties, type FormEvent } from "react";
+import { supabase } from "./lib/supabase";
 
-// ─── Supabase ──────────────────────────────────────────────────────────────
-const SUPABASE_URL = "https://zovgkatndrgzxocwpdjm.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvdmdrYXRuZHJnenhvY3dwZGptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MzY4MjEsImV4cCI6MjA5NTMxMjgyMX0.jm_BaUCN3CHPP9Rut2HM8KRVWes5nZLhJ_oyKbdqDXs";
-const CLIENTES_TABLE = `${SUPABASE_URL}/rest/v1/clientes`;
+// ─── Backend ───────────────────────────────────────────────────────────────
+// O cliente é centralizado e a autorização real é controlada pelo RLS.
 
 // ─── Meta Pixel ───────────────────────────────────────────────────────────
 type MetaPixelFunction = (...args: unknown[]) => void;
@@ -25,82 +24,71 @@ function trackMetaLead(): void {
 }
 
 async function salvarCliente(data: Record<string, string>): Promise<void> {
-  const send = (payload: Record<string, string>) => fetch(CLIENTES_TABLE, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${SUPABASE_KEY}`,
-      "Prefer": "return=minimal",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  let res = await send(data);
-  if (res.ok) return;
-
-  // Compatibilidade durante a implantação da migração do CRM: se as novas
-  // colunas ainda não existirem no Supabase, não derruba a inscrição pública.
-  const firstError = await res.text();
-  if (firstError.includes("origem") || firstError.includes("utm_source") || firstError.includes("influencer_codigo") || firstError.includes("PGRST204")) {
+  const insert = async (payload: Record<string, string>) => {
+    const { error } = await supabase.from("clientes").insert(payload);
+    return error;
+  };
+  let error = await insert(data);
+  if (!error) return;
+  const message = `${error.message} ${error.details ?? ""}`;
+  if (/origem|utm_source|utm_campaign|influencer_codigo|PGRST204/i.test(message)) {
     const legacy = { ...data };
-    ["origem", "utm_source", "utm_campaign", "influencer_codigo"].forEach(k => delete legacy[k]);
-    res = await send(legacy);
-    if (res.ok) return;
-    throw new Error(await res.text());
+    ["origem", "utm_source", "utm_campaign", "influencer_codigo"].forEach(key => delete legacy[key]);
+    error = await insert(legacy);
+    if (!error) return;
   }
-  throw new Error(firstError);
+  console.error("Public signup failed", { code: error.code, message: error.message });
+  throw new Error("Não foi possível concluir a inscrição agora.");
 }
 
 // ─── UTM / origem ─────────────────────────────────────────────────────────
+function cleanTrackingValue(value: string | null, max = 100): string {
+  return (value ?? "").replace(/[\u0000-\u001F\u007F]/g, "").trim().slice(0, max);
+}
+function safeInfluencerCode(value: string | null): string {
+  const code = cleanTrackingValue(value, 64).toLowerCase();
+  return /^[a-z0-9_-]{1,64}$/.test(code) ? code : "";
+}
+function referrerHost(): string {
+  if (!document.referrer) return "";
+  try { return new URL(document.referrer).hostname.toLowerCase().slice(0, 120); }
+  catch { return ""; }
+}
 function getOrigem(): string {
   const params = new URLSearchParams(window.location.search);
-  const utmSource   = params.get("utm_source");
-  const utmMedium   = params.get("utm_medium");
-  const utmCampaign = params.get("utm_campaign");
-  const ref         = params.get("ref");
-  if (utmSource) return [utmSource, utmMedium, utmCampaign].filter(Boolean).join(" / ");
-  if (ref)       return ref;
-  const ref2 = document.referrer;
-  if (ref2.includes("instagram")) return "Instagram (referrer)";
-  if (ref2.includes("tiktok"))    return "TikTok (referrer)";
-  if (ref2.includes("youtube"))   return "YouTube (referrer)";
-  if (ref2.includes("facebook"))  return "Facebook (referrer)";
-  if (ref2.includes("twitter") || ref2.includes("t.co")) return "Twitter/X (referrer)";
-  return ref2 ? `Outro: ${ref2}` : "Direto";
+  const utmSource = cleanTrackingValue(params.get("utm_source"));
+  const utmMedium = cleanTrackingValue(params.get("utm_medium"));
+  const utmCampaign = cleanTrackingValue(params.get("utm_campaign"));
+  const ref = safeInfluencerCode(params.get("ref"));
+  if (utmSource) return [utmSource, utmMedium, utmCampaign].filter(Boolean).join(" / ").slice(0, 240);
+  if (ref) return ref;
+  const host = referrerHost();
+  if (host.includes("instagram")) return "Instagram (referrer)";
+  if (host.includes("tiktok")) return "TikTok (referrer)";
+  if (host.includes("youtube")) return "YouTube (referrer)";
+  if (host.includes("facebook")) return "Facebook (referrer)";
+  if (host.includes("twitter") || host === "t.co") return "Twitter/X (referrer)";
+  return host ? `Outro: ${host}` : "Direto";
 }
-
 function getTrackingData() {
   const params = new URLSearchParams(window.location.search);
-  return {
-    origem: getOrigem(),
-    utm_source: params.get("utm_source") || "",
-    utm_campaign: params.get("utm_campaign") || "",
-    influencer_codigo: (params.get("ref") || "").toLowerCase().trim(),
-  };
+  return { origem: getOrigem(), utm_source: cleanTrackingValue(params.get("utm_source")), utm_campaign: cleanTrackingValue(params.get("utm_campaign")), influencer_codigo: safeInfluencerCode(params.get("ref")) };
 }
-
-// ─── Cliques de influencer ─────────────────────────────────────────────────
 function getInfluencerCodigo(): string {
   const params = new URLSearchParams(window.location.search);
-  const codigo = (params.get("ref") || params.get("utm_source") || "").toLowerCase().trim();
-  return codigo;
+  return safeInfluencerCode(params.get("ref") || params.get("utm_source"));
+}
+async function registrarCliqueInfluencer(codigo: string): Promise<void> {
+  if (!codigo) return;
+  const { error } = await supabase.rpc("increment_influencer_click", { p_codigo: codigo });
+  if (error) console.warn("Influencer click tracking failed", error.code);
 }
 
-async function registrarCliqueInfluencer(codigo: string): Promise<void> {
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/rpc/increment_influencer_click`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": SUPABASE_KEY,
-        "Authorization": `Bearer ${SUPABASE_KEY}`,
-      },
-      body: JSON.stringify({ p_codigo: codigo }),
-    });
-  } catch (e) {
-    console.error(e);
-  }
+function safeSessionGet(key: string): string | null {
+  try { return window.sessionStorage.getItem(key); } catch { return null; }
+}
+function safeSessionSet(key: string, value: string): void {
+  try { window.sessionStorage.setItem(key, value); } catch { /* storage blocked: tracking de clique pode repetir, sem afetar o produto */ }
 }
 
 // ─── Dados do formulário ───────────────────────────────────────────────────
@@ -139,7 +127,6 @@ const formInicial: FormData = {
 
 // ─── Estilos compartilhados ────────────────────────────────────────────────
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Lato:wght@300;400;700&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
   body { background: #0d0720; }
@@ -165,7 +152,6 @@ const CSS = `
       linear-gradient(rgba(124,58,237,0.12) 1px, transparent 1px),
       linear-gradient(90deg, rgba(124,58,237,0.12) 1px, transparent 1px);
     background-size: 48px 48px;
-    animation: gridPulse 6s ease-in-out infinite;
   }
 
   .hero-title {
@@ -175,7 +161,6 @@ const CSS = `
     background-size: 300% auto;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    animation: shimmer 4s linear infinite;
   }
 
   .btn-primary {
@@ -189,7 +174,6 @@ const CSS = `
     letter-spacing: 1px;
     cursor: pointer;
     transition: all 0.3s;
-    animation: glow 3s ease-in-out infinite;
   }
   .btn-primary:hover { background-position: right center; transform: translateY(-2px); box-shadow: 0 8px 30px #7c3aed66; }
 
@@ -235,14 +219,14 @@ const CSS = `
     border: 1px solid #4a2a8a;
     border-radius: 10px;
     color: #e2d0ff;
-    font-family: 'Lato', sans-serif;
+    font-family: 'Manrope', sans-serif;
     font-size: 15px;
     padding: 14px 16px;
     outline: none;
     transition: border 0.2s;
   }
   .form-input:focus { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124,58,237,0.15); }
-  .form-input::placeholder { color: #4a2a8a; }
+  .form-input::placeholder { color: #9d8bbf; }
 
   .section-label {
     font-family: 'Cinzel', serif;
@@ -279,10 +263,21 @@ const CSS = `
     transition: width 0.4s ease;
   }
 
+  button, input, select { min-height: 44px; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba(216,180,254,.65); outline-offset: 3px; }
+  .tag-btn { min-height: 44px; }
+  .confirm-button { width:100%; display:flex; align-items:flex-start; gap:12px; padding:14px 16px; text-align:left; color:inherit; font:inherit; }
+  .form-error { color:#fecdd3; background:rgba(127,29,29,.14); border:1px solid rgba(251,113,133,.3); border-radius:10px; padding:10px 12px; font-family:'Manrope',sans-serif; font-size:13px; line-height:1.5; text-align:left; }
+  .form-hint { font:500 11px/1.5 'Manrope',sans-serif; color:#a99cba; margin-top:6px; }
+  @media (hover:hover) and (pointer:fine) { .card:hover { border-color:#5f3a90; transform:translateY(-2px); box-shadow:0 10px 28px rgba(0,0,0,.2); } }
+  @media (prefers-reduced-motion:reduce) { html{scroll-behavior:auto}.fade-up,.fade-up-1,.fade-up-2,.fade-up-3{animation:none!important}.btn-primary,.btn-ghost,.card,.tag-btn,.progress-fill{transition:none!important}.btn-primary:hover,.card:hover{transform:none} }
+
   @media (max-width: 640px) {
     .hero-title { font-size: clamp(32px, 9vw, 56px) !important; }
     .hide-mobile { display: none !important; }
     .full-mobile { width: 100% !important; }
+    .form-input { font-size:16px; min-height:48px; }
+    .tag-btn,.btn-primary,.btn-ghost{min-height:48px}
   }
 `;
 
@@ -314,7 +309,7 @@ function Navbar({ onInscrever, onLogoClick }: { onInscrever: () => void; onLogoC
         <a href="https://instagram.com/criandoxp" target="_blank" rel="noreferrer"
           style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: "#7c3aed", textDecoration: "none", letterSpacing: 1 }}
           className="hide-mobile">@CriandoXP</a>
-        <button className="btn-primary" onClick={onInscrever}
+        <button type="button" className="btn-primary" onClick={onInscrever}
           style={{ padding: "10px 24px", fontSize: 13 }}>
           Inscrever-se
         </button>
@@ -351,12 +346,12 @@ function Hero({ onInscrever }: { onInscrever: () => void }) {
       </div>
 
       <div className="fade-up-3" style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center" }}>
-        <button className="btn-primary" onClick={onInscrever}
+        <button type="button" className="btn-primary" onClick={onInscrever}
           style={{ padding: "16px 36px", fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
           ⚔️ Inscrever-se Agora
         </button>
         <a href="#sobre" style={{ textDecoration: "none" }}>
-          <button className="btn-ghost" style={{ padding: "16px 28px", fontSize: 13 }}>
+          <button type="button" className="btn-ghost" style={{ padding: "16px 28px", fontSize: 13 }}>
             Saiba mais ↓
           </button>
         </a>
@@ -384,7 +379,7 @@ function Beneficios() {
         <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: "clamp(26px, 5vw, 40px)", fontWeight: 900, color: "#e879f9", letterSpacing: 1 }}>
           Quais São os Benefícios?
         </h2>
-        <p style={{ fontFamily: "'Lato', sans-serif", color: "#7c3aed", marginTop: 10, fontSize: 14 }}>
+        <p style={{ fontFamily: "'Manrope', sans-serif", color: "#7c3aed", marginTop: 10, fontSize: 14 }}>
           Tudo que você ganha ao fazer parte da Criando XP
         </p>
       </div>
@@ -393,7 +388,7 @@ function Beneficios() {
           <div key={i} className="card" style={{ padding: "28px 20px", textAlign: "center", animationDelay: `${i * 0.07}s` }}>
             <div style={{ fontSize: 36, marginBottom: 14 }}>{item.icon}</div>
             <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, color: "#c084fc", marginBottom: 8, letterSpacing: 0.5 }}>{item.title}</div>
-            <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 13, color: "#9d8bbf", lineHeight: 1.5 }}>{item.desc}</div>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#9d8bbf", lineHeight: 1.5 }}>{item.desc}</div>
           </div>
         ))}
       </div>
@@ -436,11 +431,11 @@ function Sistemas() {
             <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 700, color: "#c084fc", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
               🔮 A Criando XP
             </div>
-            <p style={{ fontFamily: "'Lato', sans-serif", fontSize: 14, color: "#9d8bbf", lineHeight: 1.7 }}>
+            <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#9d8bbf", lineHeight: 1.7 }}>
               A Criando XP é uma empresa de mesas de RPG comissionadas, que busca{" "}
               <strong style={{ color: "#a855f7" }}>profissionalizar mestres</strong> e criar um ambiente seguro, respeitoso, acolhedor e responsável para seus jogadores.
             </p>
-            <p style={{ fontFamily: "'Lato', sans-serif", fontSize: 14, color: "#9d8bbf", lineHeight: 1.7, marginTop: 12 }}>
+            <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#9d8bbf", lineHeight: 1.7, marginTop: 12 }}>
               Além de sempre prezar pela diversão de todos, também preza pelo{" "}
               <strong style={{ color: "#a855f7" }}>compromisso, responsabilidade e pontualidade</strong>, tanto com mestres quanto com jogadores.
             </p>
@@ -458,11 +453,11 @@ function Sistemas() {
               { label: "Taxa de entrada",valor: "4 sessões (abatida no final)" },
             ].map((v, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i < 3 ? "1px solid #2d1b69" : "none" }}>
-                <span style={{ fontFamily: "'Lato', sans-serif", fontSize: 13, color: "#7c3aed" }}>{v.label}</span>
+                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#7c3aed" }}>{v.label}</span>
                 <span style={{ fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, color: "#e2d0ff" }}>{v.valor}</span>
               </div>
             ))}
-            <p style={{ fontFamily: "'Lato', sans-serif", fontSize: 11, color: "#5a3a8a", marginTop: 12, textAlign: "center" }}>
+            <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "#9d8bbf", marginTop: 12, textAlign: "center" }}>
               Não pode pagar a taxa? Entre sem ela e pague apenas se precisar sair da mesa.
             </p>
           </div>
@@ -494,7 +489,7 @@ function Contrato() {
             <div key={i} className="card" style={{ padding: "24px 18px", textAlign: "center" }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>{r.icon}</div>
               <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700, color: "#c084fc", marginBottom: 10, letterSpacing: 0.5 }}>{r.titulo}</div>
-              <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 12, color: "#9d8bbf", lineHeight: 1.6 }}>{r.desc}</div>
+              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "#9d8bbf", lineHeight: 1.6 }}>{r.desc}</div>
             </div>
           ))}
         </div>
@@ -523,17 +518,52 @@ function Formulario({ onVoltar }: { onVoltar: () => void }) {
   }, [step]);
 
   const toggleArray = (field: "sistemas_jogados" | "sistemas_desejados" | "melhor_dia", val: string) => {
+    setErro("");
     setForm(prev => {
-      const arr = prev[field];
-      return { ...prev, [field]: arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val] };
+      const current = prev[field];
+      if (field === "sistemas_jogados") {
+        if (val === "Nunca joguei") return { ...prev, [field]: current.includes(val) ? [] : [val] };
+        const withoutNever = current.filter(item => item !== "Nunca joguei");
+        return { ...prev, [field]: withoutNever.includes(val) ? withoutNever.filter(item => item !== val) : [...withoutNever, val] };
+      }
+      return { ...prev, [field]: current.includes(val) ? current.filter(item => item !== val) : [...current, val] };
     });
   };
 
   const toggleSingle = (field: keyof FormData, val: string) => {
+    setErro("");
     setForm(prev => ({ ...prev, [field]: prev[field] === val ? "" : val }));
   };
 
+  const validateStep0 = () => {
+    const age = Number(form.idade);
+    const phone = form.whatsapp_discord.replace(/\D/g, "");
+    if (form.nome.trim().length < 2) return "Informe seu nome completo.";
+    if (!Number.isInteger(age) || age < 18 || age > 100) return "As inscrições são destinadas a pessoas de 18 a 100 anos.";
+    if (phone.length < 10 || phone.length > 15) return "Informe um WhatsApp válido com DDD.";
+    if (!form.tempo_rpg) return "Informe há quanto tempo você joga RPG de mesa.";
+    return "";
+  };
+  const validateStep1 = () => !form.sistemas_desejados.length || !form.melhor_dia.length || !form.melhor_periodo
+    ? "Preencha todos os campos obrigatórios."
+    : "";
+  const validateStep2 = () => {
+    const allChecked = ["ciente_valores","ciente_compromisso","ciente_contrato","ciente_taxa","ciente_tolerancia","ciente_consentimento"]
+      .every(key => form[key as keyof FormData] === "Sim");
+    return !allChecked || !form.pronto_ingressar ? "Confirme todos os itens e responda se está pronto." : "";
+  };
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const message = step === 0 ? validateStep0() : step === 1 ? validateStep1() : validateStep2();
+    if (message) { setErro(message); return; }
+    setErro("");
+    if (step === 0) setStep(1);
+    else if (step === 1) setStep(2);
+    else void enviar();
+  };
+
   const enviar = async () => {
+    if (enviando) return;
     setEnviando(true);
     setErro("");
     try {
@@ -564,14 +594,15 @@ function Formulario({ onVoltar }: { onVoltar: () => void }) {
       });
       trackMetaLead();
       setEnviado(true);
-    } catch (e: any) {
-      setErro("Erro ao enviar. Tente novamente ou entre em contato pelo Instagram.");
+    } catch (error) {
+      console.error("Signup submit failed", error);
+      setErro("Não foi possível enviar agora. Confira sua conexão e tente novamente.");
     } finally {
       setEnviando(false);
     }
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelStyle: CSSProperties = {
     fontFamily: "'Cinzel', serif", fontSize: 13, color: "#c9a0f5",
     display: "block", marginBottom: 10, letterSpacing: 0.5,
   };
@@ -585,9 +616,9 @@ function Formulario({ onVoltar }: { onVoltar: () => void }) {
           <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 32, fontWeight: 900, color: "#c084fc", marginBottom: 16 }}>
             Aventura Iniciada!
           </h2>
-          <p style={{ fontFamily: "'Lato', sans-serif", fontSize: 16, color: "#9d8bbf", lineHeight: 1.7, marginBottom: 32, maxWidth: 400 }}>
+          <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "#9d8bbf", lineHeight: 1.7, marginBottom: 32, maxWidth: 400 }}>
 Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsApp para te apresentar as mesas disponíveis. 🧙          </p>
-          <button className="btn-primary" onClick={onVoltar} style={{ padding: "14px 32px", fontSize: 14 }}>
+          <button type="button" className="btn-primary" onClick={onVoltar} style={{ padding: "14px 32px", fontSize: 14 }}>
             ← Voltar ao início
           </button>
         </div>
@@ -597,7 +628,7 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
 
   return (
     <div ref={topRef} style={{ minHeight: "100vh", padding: "80px 16px 40px" }}>
-      <div style={{ maxWidth: 560, margin: "0 auto" }}>
+      <form style={{ maxWidth: 560, margin: "0 auto" }} onSubmit={handleSubmit}>
 
         {/* Header do form */}
         <div style={{ marginBottom: 32, textAlign: "center" }}>
@@ -605,7 +636,7 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
           <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: "clamp(20px, 5vw, 28px)", fontWeight: 900, color: "#e879f9", marginBottom: 16 }}>
             {step === 0 ? "📋 Seus Dados" : step === 1 ? "🎲 Suas Preferências" : "✅ Confirmações"}
           </h2>
-          <div className="progress-bar">
+          <div className="progress-bar" role="progressbar" aria-label="Progresso da inscrição" aria-valuemin={1} aria-valuemax={totalSteps} aria-valuenow={step + 1}>
             <div className="progress-fill" style={{ width: `${progress}%` }} />
           </div>
         </div>
@@ -614,41 +645,41 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
         {step === 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <div>
-              <label style={labelStyle}>Seu nome completo {reqMark}</label>
-              <input className="form-input" value={form.nome} placeholder="Como devemos te chamar?"
-                onChange={e => setForm(p => ({ ...p, nome: e.target.value }))} />
+              <label htmlFor="signup-name" style={labelStyle}>Seu nome completo {reqMark}</label>
+              <input id="signup-name" className="form-input" value={form.nome} maxLength={100} autoComplete="name" required aria-required="true" placeholder="Como devemos te chamar?"
+                onChange={e => { setErro(""); setForm(p => ({ ...p, nome: e.target.value })); }} />
             </div>
             <div>
-              <label style={labelStyle}>Sua idade {reqMark}</label>
-              <input className="form-input" value={form.idade} placeholder="Ex: 23" type="number"
-                onChange={e => setForm(p => ({ ...p, idade: e.target.value }))} />
+              <label htmlFor="signup-age" style={labelStyle}>Sua idade {reqMark}</label>
+              <input id="signup-age" className="form-input" value={form.idade} placeholder="Ex: 23" type="number" min={18} max={100} inputMode="numeric" required aria-required="true"
+                onChange={e => { setErro(""); setForm(p => ({ ...p, idade: e.target.value })); }} />
+              <p className="form-hint">As mesas são destinadas a maiores de 18 anos.</p>
             </div>
             <div>
-              <label style={labelStyle}>WhatsApp {reqMark}</label>
-<input className="form-input" value={form.whatsapp_discord} placeholder="(11) 99999-9999"
-  onChange={e => setForm(p => ({ ...p, whatsapp_discord: e.target.value }))} />
+              <label htmlFor="signup-contact" style={labelStyle}>WhatsApp {reqMark}</label>
+<input id="signup-contact" className="form-input" value={form.whatsapp_discord} maxLength={24} autoComplete="tel" inputMode="tel" required aria-required="true" placeholder="(11) 99999-9999"
+  onChange={e => { setErro(""); setForm(p => ({ ...p, whatsapp_discord: e.target.value })); }} />
             </div>
             <div>
               <label style={labelStyle}>Há quanto tempo você joga RPG de mesa? {reqMark}</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {TEMPO_OPTIONS.map(t => (
-                  <button key={t} className={`tag-btn ${form.tempo_rpg === t ? "selected" : ""}`}
+                  <button type="button" key={t} className={`tag-btn ${form.tempo_rpg === t ? "selected" : ""}`} aria-pressed={form.tempo_rpg === t}
                     onClick={() => toggleSingle("tempo_rpg", t)}>{t}</button>
                 ))}
               </div>
             </div>
 
             <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-              <button className="btn-ghost" onClick={onVoltar} style={{ padding: "14px 20px", fontSize: 13, flex: 1 }}>
+              <button type="button" className="btn-ghost" onClick={onVoltar} style={{ padding: "14px 20px", fontSize: 13, flex: 1 }}>
                 ← Voltar
               </button>
-              <button className="btn-primary"
-                onClick={() => { if (!form.nome || !form.idade || !form.whatsapp_discord || !form.tempo_rpg) { setErro("Preencha todos os campos obrigatórios."); return; } setErro(""); setStep(1); }}
+              <button type="submit" className="btn-primary"
                 style={{ padding: "14px 0", fontSize: 14, flex: 2 }}>
                 Próximo →
               </button>
             </div>
-            {erro && <p style={{ color: "#fca5a5", fontFamily: "'Lato', sans-serif", fontSize: 13, textAlign: "center" }}>{erro}</p>}
+            {erro && <p className="form-error" role="alert">{erro}</p>}
           </div>
         )}
 
@@ -659,7 +690,7 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
               <label style={labelStyle}>Quais sistemas você já jogou?</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {["Nunca joguei", ...SISTEMAS].map(s => (
-                  <button key={s} className={`tag-btn ${form.sistemas_jogados.includes(s) ? "selected" : ""}`}
+                  <button type="button" key={s} className={`tag-btn ${form.sistemas_jogados.includes(s) ? "selected" : ""}`} aria-pressed={form.sistemas_jogados.includes(s)}
                     onClick={() => toggleArray("sistemas_jogados", s)}>{s}</button>
                 ))}
               </div>
@@ -668,7 +699,7 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
               <label style={labelStyle}>Quais sistemas gostaria de jogar conosco? {reqMark}</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {SISTEMAS.map(s => (
-                  <button key={s} className={`tag-btn ${form.sistemas_desejados.includes(s) ? "selected" : ""}`}
+                  <button type="button" key={s} className={`tag-btn ${form.sistemas_desejados.includes(s) ? "selected" : ""}`} aria-pressed={form.sistemas_desejados.includes(s)}
                     onClick={() => toggleArray("sistemas_desejados", s)}>{s}</button>
                 ))}
               </div>
@@ -677,7 +708,7 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
               <label style={labelStyle}>Qual é o seu melhor dia para jogar? {reqMark}</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {DIAS.map(d => (
-                  <button key={d} className={`tag-btn ${form.melhor_dia.includes(d) ? "selected" : ""}`}
+                  <button type="button" key={d} className={`tag-btn ${form.melhor_dia.includes(d) ? "selected" : ""}`} aria-pressed={form.melhor_dia.includes(d)}
                     onClick={() => toggleArray("melhor_dia", d)}>{d}</button>
                 ))}
               </div>
@@ -686,30 +717,29 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
               <label style={labelStyle}>Qual é o seu melhor período? {reqMark}</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {PERIODOS.map(p => (
-                  <button key={p} className={`tag-btn ${form.melhor_periodo === p ? "selected" : ""}`}
+                  <button type="button" key={p} className={`tag-btn ${form.melhor_periodo === p ? "selected" : ""}`} aria-pressed={form.melhor_periodo === p}
                     onClick={() => toggleSingle("melhor_periodo", p)}>{p}</button>
                 ))}
               </div>
             </div>
 
             <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-              <button className="btn-ghost" onClick={() => setStep(0)} style={{ padding: "14px 20px", fontSize: 13, flex: 1 }}>
+              <button type="button" className="btn-ghost" onClick={() => setStep(0)} style={{ padding: "14px 20px", fontSize: 13, flex: 1 }}>
                 ← Voltar
               </button>
-              <button className="btn-primary"
-                onClick={() => { if (!form.sistemas_desejados.length || !form.melhor_dia.length || !form.melhor_periodo) { setErro("Preencha todos os campos obrigatórios."); return; } setErro(""); setStep(2); }}
+              <button type="submit" className="btn-primary"
                 style={{ padding: "14px 0", fontSize: 14, flex: 2 }}>
                 Próximo →
               </button>
             </div>
-            {erro && <p style={{ color: "#fca5a5", fontFamily: "'Lato', sans-serif", fontSize: 13, textAlign: "center" }}>{erro}</p>}
+            {erro && <p className="form-error" role="alert">{erro}</p>}
           </div>
         )}
 
         {/* ── STEP 2: Confirmações ── */}
         {step === 2 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <p style={{ fontFamily: "'Lato', sans-serif", fontSize: 13, color: "#9d8bbf", lineHeight: 1.6, marginBottom: 8 }}>
+            <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#9d8bbf", lineHeight: 1.6, marginBottom: 8 }}>
               Por favor, confirme que você está ciente de cada item abaixo para concluir sua inscrição:
             </p>
 
@@ -723,8 +753,10 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
             ].map(({ key, txt }) => {
               const val = form[key as keyof FormData] as string;
               return (
-                <div key={key}
+                <button type="button" key={key}
                   onClick={() => toggleSingle(key as keyof FormData, "Sim")}
+                  aria-pressed={val === "Sim"}
+                  className="confirm-button"
                   style={{
                     display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px",
                     background: val === "Sim" ? "rgba(124,58,237,0.15)" : "#110828",
@@ -738,8 +770,8 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
                   }}>
                     {val === "Sim" && <span style={{ color: "#fff", fontSize: 12 }}>✓</span>}
                   </div>
-                  <span style={{ fontFamily: "'Lato', sans-serif", fontSize: 13, color: val === "Sim" ? "#e2d0ff" : "#9d8bbf", lineHeight: 1.5 }}>{txt}</span>
-                </div>
+                  <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: val === "Sim" ? "#e2d0ff" : "#b5a9c8", lineHeight: 1.5 }}>{txt}</span>
+                </button>
               );
             })}
 
@@ -747,7 +779,7 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
               <label style={labelStyle}>Você está pronto para ingressar? {reqMark}</label>
               <div style={{ display: "flex", gap: 10 }}>
                 {["Sim, estou pronto!", "Ainda tenho dúvidas"].map(op => (
-                  <button key={op} className={`tag-btn ${form.pronto_ingressar === op ? "selected" : ""}`}
+                  <button type="button" key={op} className={`tag-btn ${form.pronto_ingressar === op ? "selected" : ""}`} aria-pressed={form.pronto_ingressar === op}
                     style={{ flex: 1 }}
                     onClick={() => toggleSingle("pronto_ingressar", op)}>{op}</button>
                 ))}
@@ -755,33 +787,27 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
             </div>
 
             <div>
-              <label style={labelStyle}>Código de desconto (opcional)</label>
-              <input className="form-input" value={form.codigo_desconto} placeholder="Insira seu código, se tiver"
+              <label htmlFor="discount-code" style={labelStyle}>Código de desconto (opcional)</label>
+              <input id="discount-code" className="form-input" value={form.codigo_desconto} maxLength={60} autoComplete="off" placeholder="Insira seu código, se tiver"
                 onChange={e => setForm(p => ({ ...p, codigo_desconto: e.target.value }))} />
             </div>
 
             <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-              <button className="btn-ghost" onClick={() => setStep(1)} style={{ padding: "14px 20px", fontSize: 13, flex: 1 }}>
+              <button type="button" className="btn-ghost" onClick={() => setStep(1)} style={{ padding: "14px 20px", fontSize: 13, flex: 1 }}>
                 ← Voltar
               </button>
-              <button className="btn-primary"
+              <button type="submit" className="btn-primary"
                 disabled={enviando}
-                onClick={() => {
-                  const allChecked = ["ciente_valores","ciente_compromisso","ciente_contrato","ciente_taxa","ciente_tolerancia","ciente_consentimento"]
-                    .every(k => form[k as keyof FormData] === "Sim");
-                  if (!allChecked || !form.pronto_ingressar) { setErro("Confirme todos os itens e responda se está pronto."); return; }
-                  setErro(""); enviar();
-                }}
                 style={{ padding: "14px 0", fontSize: 14, flex: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                 {enviando
                   ? <><div style={{ width: 16, height: 16, border: "2px solid #fff5", borderTop: "2px solid #fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /> Enviando...</>
                   : "🎲 Confirmar Inscrição"}
               </button>
             </div>
-            {erro && <p style={{ color: "#fca5a5", fontFamily: "'Lato', sans-serif", fontSize: 13, textAlign: "center" }}>{erro}</p>}
+            {erro && <p className="form-error" role="alert">{erro}</p>}
           </div>
         )}
-      </div>
+      </form>
     </div>
   );
 }
@@ -791,7 +817,7 @@ function Footer() {
   return (
     <footer style={{ padding: "32px 24px", borderTop: "1px solid #2d1b69", textAlign: "center" }}>
       <img src="/icons/criandoxp.png" alt="" style={{ width: 28, height: 28, objectFit: "contain", marginBottom: 8 }} />
-      <p style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#3d1b69", letterSpacing: 2, textTransform: "uppercase" }}>
+      <p style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: "#9d8bbf", letterSpacing: 2, textTransform: "uppercase" }}>
         © 2026 Criando XP · Mesas de RPG Profissional
       </p>
     </footer>
@@ -800,16 +826,24 @@ function Footer() {
 
 // ─── LandingPage principal ─────────────────────────────────────────────────
 export default function LandingPage({ onAbrirDashboard }: { onAbrirDashboard: () => void }) {
-  const [paginaAtual, setPaginaAtual] = useState<"landing" | "form">("landing");
+  const pageFromPath = () => window.location.pathname === "/inscrever" ? "form" as const : "landing" as const;
+  const [paginaAtual, setPaginaAtual] = useState<"landing" | "form">(pageFromPath);
+  const navigate = (next: "landing" | "form") => {
+    const url = new URL(window.location.href);
+    url.pathname = next === "form" ? "/inscrever" : "/";
+    window.history.pushState({}, "", url.pathname + url.search);
+    setPaginaAtual(next);
+  };
+  useEffect(() => { const onPop = () => setPaginaAtual(pageFromPath()); window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
 
   // ── Registra o clique do link de influencer (uma vez por sessão) ──
   useEffect(() => {
     const codigo = getInfluencerCodigo();
     if (!codigo) return;
-    const jaContado = sessionStorage.getItem("xp_click_" + codigo);
+    const jaContado = safeSessionGet("xp_click_" + codigo);
     if (jaContado) return;
-    sessionStorage.setItem("xp_click_" + codigo, "1");
-    registrarCliqueInfluencer(codigo);
+    safeSessionSet("xp_click_" + codigo, "1");
+    void registrarCliqueInfluencer(codigo);
   }, []);
 
   // ── Segredo: 7 cliques no logo abre o dashboard ──
@@ -826,15 +860,17 @@ export default function LandingPage({ onAbrirDashboard }: { onAbrirDashboard: ()
     }
   };
 
+  useEffect(() => () => { if (clickTimer.current) clearTimeout(clickTimer.current); }, []);
+
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0d0720 0%, #1a0d3a 40%, #0d0720 100%)", color: "#e2d0ff" }}>
       <style>{CSS}</style>
 
       {paginaAtual === "landing" ? (
         <>
-  <Navbar onInscrever={() => setPaginaAtual("form")} onLogoClick={handleLogoClick} />
+  <Navbar onInscrever={() => navigate("form")} onLogoClick={handleLogoClick} />
 
-          <Hero onInscrever={() => setPaginaAtual("form")} />
+          <Hero onInscrever={() => navigate("form")} />
           <Beneficios />
           <Sistemas/>
           <Contrato />
@@ -845,10 +881,10 @@ export default function LandingPage({ onAbrirDashboard }: { onAbrirDashboard: ()
               <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: "clamp(22px, 4vw, 34px)", fontWeight: 900, color: "#e879f9", marginBottom: 16 }}>
                 Pronto para sua aventura?
               </h2>
-              <p style={{ fontFamily: "'Lato', sans-serif", color: "#9d8bbf", fontSize: 15, marginBottom: 32, lineHeight: 1.7 }}>
+              <p style={{ fontFamily: "'Manrope', sans-serif", color: "#9d8bbf", fontSize: 15, marginBottom: 32, lineHeight: 1.7 }}>
                 Preencha nosso formulário e em breve entraremos em contato para te apresentar as mesas disponíveis.
               </p>
-              <button className="btn-primary" onClick={() => setPaginaAtual("form")}
+              <button type="button" className="btn-primary" onClick={() => navigate("form")}
                 style={{ padding: "18px 48px", fontSize: 16, display: "inline-flex", alignItems: "center", gap: 10 }}>
                 ⚔️ Inscrever-se Agora
               </button>
@@ -860,7 +896,7 @@ export default function LandingPage({ onAbrirDashboard }: { onAbrirDashboard: ()
       ) : (
         <>
           <Navbar onInscrever={() => {}} onLogoClick={handleLogoClick} />
-          <Formulario onVoltar={() => setPaginaAtual("landing")} />
+          <Formulario onVoltar={() => navigate("landing")} />
           <Footer />
         </>
       )}
