@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties, type ReactNode, type DragEvent, type FormEvent } from "react";
+﻿import { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties, type ReactNode, type DragEvent, type FormEvent } from "react";
 import LandingPage from "./LandingPage";
 import OnboardingTour, { getBrowserActorName, setBrowserActorName, ONBOARDING_VERSION, type TourStep } from "./components/Onboarding";
 import { supabase } from "./lib/supabase";
@@ -278,32 +278,46 @@ function makeRow(n: number, mes: number, dateISO = "", partial: Partial<Row> = {
 
 // ─── Banco ─────────────────────────────────────────────────────────────────
 async function dbLoad(mes: number): Promise<Row[]> {
-  // A visão editorial trabalha no ano corrente. Filtrar pelo intervalo real da
-  // data evita misturar, por exemplo, agosto de 2025 com agosto de 2026. Itens
-  // sem data continuam vindo junto porque formam o backlog global.
+  // Mantemos mês e backlog em consultas separadas. Isso evita depender da
+  // sintaxe raw do PostgREST em `.or()` e torna erros de schema/RLS muito mais
+  // fáceis de identificar e recuperar.
   const year = new Date().getFullYear();
   const start = `${year}-${pad(mes + 1)}-01`;
   const last = new Date(year, mes + 1, 0);
   const end = `${year}-${pad(mes + 1)}-${pad(last.getDate())}`;
-  const primary = await supabase
-    .from("postagens")
-    .select("*")
-    .or(`and(data_iso.gte.${start},data_iso.lte.${end}),data_iso.is.null`)
-    .order("data_iso", { ascending: true, nullsFirst: false });
 
-  if (!primary.error) {
-    return (primary.data ?? [])
-      .map(normalizeRow)
-      .filter(row => {
-        const iso = dateInputValue(row);
-        return !iso || (iso >= start && iso <= end);
-      });
+  const [dated, backlog] = await Promise.all([
+    supabase
+      .from("postagens")
+      .select("*")
+      .gte("data_iso", start)
+      .lte("data_iso", end)
+      .order("data_iso", { ascending: true }),
+    supabase
+      .from("postagens")
+      .select("*")
+      .is("data_iso", null)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  if (!dated.error && !backlog.error) {
+    const merged = [...(dated.data ?? []), ...(backlog.data ?? [])];
+    const unique = Array.from(new Map(merged.map(row => [row.id, row])).values());
+    return unique.map(normalizeRow);
   }
 
-  // Compatibilidade de deploy: antes da migração criar data_iso, ainda consegue
-  // abrir o calendário usando o campo mes legado.
-  const msg = primary.error.message || "";
-  if (msg.includes("data_iso") || msg.includes("PGRST") || msg.includes("schema cache")) {
+  const firstError = dated.error ?? backlog.error;
+  const msg = firstError?.message || "";
+
+  // Compatibilidade de deploy: caso data_iso/created_at ainda não esteja no
+  // schema cache, abre o calendário pelo campo legado `mes` em vez de derrubar
+  // a página inteira.
+  if (
+    msg.includes("data_iso") ||
+    msg.includes("created_at") ||
+    msg.includes("PGRST") ||
+    msg.toLowerCase().includes("schema cache")
+  ) {
     const fallback = await supabase.from("postagens").select("*").eq("mes", mes);
     if (fallback.error) throw new Error(fallback.error.message);
     return (fallback.data ?? []).map(normalizeRow).filter(row => {
@@ -312,7 +326,7 @@ async function dbLoad(mes: number): Promise<Row[]> {
     });
   }
 
-  throw new Error(primary.error.message);
+  throw new Error(firstError?.message || "Falha ao carregar postagens");
 }
 
 async function dbLoadAllRows(): Promise<Row[]> {
