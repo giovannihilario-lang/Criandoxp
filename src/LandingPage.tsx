@@ -219,7 +219,7 @@ const CSS = `
     border: 1px solid #4a2a8a;
     border-radius: 10px;
     color: #e2d0ff;
-    font-family: 'Manrope', sans-serif;
+    font-family: 'Lato', sans-serif;
     font-size: 15px;
     padding: 14px 16px;
     outline: none;
@@ -267,8 +267,8 @@ const CSS = `
   button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba(216,180,254,.65); outline-offset: 3px; }
   .tag-btn { min-height: 44px; }
   .confirm-button { width:100%; display:flex; align-items:flex-start; gap:12px; padding:14px 16px; text-align:left; color:inherit; font:inherit; }
-  .form-error { color:#fecdd3; background:rgba(127,29,29,.14); border:1px solid rgba(251,113,133,.3); border-radius:10px; padding:10px 12px; font-family:'Manrope',sans-serif; font-size:13px; line-height:1.5; text-align:left; }
-  .form-hint { font:500 11px/1.5 'Manrope',sans-serif; color:#a99cba; margin-top:6px; }
+  .form-error { color:#fecdd3; background:rgba(127,29,29,.14); border:1px solid rgba(251,113,133,.3); border-radius:10px; padding:10px 12px; font-family:'Lato',sans-serif; font-size:13px; line-height:1.5; text-align:left; }
+  .form-hint { font:500 11px/1.5 'Lato',sans-serif; color:#a99cba; margin-top:6px; }
   @media (hover:hover) and (pointer:fine) { .card:hover { border-color:#5f3a90; transform:translateY(-2px); box-shadow:0 10px 28px rgba(0,0,0,.2); } }
   @media (prefers-reduced-motion:reduce) { html{scroll-behavior:auto}.fade-up,.fade-up-1,.fade-up-2,.fade-up-3{animation:none!important}.btn-primary,.btn-ghost,.card,.tag-btn,.progress-fill{transition:none!important}.btn-primary:hover,.card:hover{transform:none} }
 
@@ -379,7 +379,7 @@ function Beneficios() {
         <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: "clamp(26px, 5vw, 40px)", fontWeight: 900, color: "#e879f9", letterSpacing: 1 }}>
           Quais São os Benefícios?
         </h2>
-        <p style={{ fontFamily: "'Manrope', sans-serif", color: "#7c3aed", marginTop: 10, fontSize: 14 }}>
+        <p style={{ fontFamily: "'Lato', sans-serif", color: "#7c3aed", marginTop: 10, fontSize: 14 }}>
           Tudo que você ganha ao fazer parte da Criando XP
         </p>
       </div>
@@ -388,7 +388,7 @@ function Beneficios() {
           <div key={i} className="card" style={{ padding: "28px 20px", textAlign: "center", animationDelay: `${i * 0.07}s` }}>
             <div style={{ fontSize: 36, marginBottom: 14 }}>{item.icon}</div>
             <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, color: "#c084fc", marginBottom: 8, letterSpacing: 0.5 }}>{item.title}</div>
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#9d8bbf", lineHeight: 1.5 }}>{item.desc}</div>
+            <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 13, color: "#9d8bbf", lineHeight: 1.5 }}>{item.desc}</div>
           </div>
         ))}
       </div>
@@ -431,11 +431,11 @@ function Sistemas() {
             <div style={{ fontFamily: "'Cinzel', serif", fontSize: 14, fontWeight: 700, color: "#c084fc", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
               🔮 A Criando XP
             </div>
-            <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#9d8bbf", lineHeight: 1.7 }}>
+            <p style={{ fontFamily: "'Lato', sans-serif", fontSize: 14, color: "#9d8bbf", lineHeight: 1.7 }}>
               A Criando XP é uma empresa de mesas de RPG comissionadas, que busca{" "}
               <strong style={{ color: "#a855f7" }}>profissionalizar mestres</strong> e criar um ambiente seguro, respeitoso, acolhedor e responsável para seus jogadores.
             </p>
-            <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#9d8bbf", lineHeight: 1.7, marginTop: 12 }}>
+            <p style={{ fontFamily: "'Lato', sans-serif", fontSize: 14, color: "#9d8bbf", lineHeight: 1.7, marginTop: 12 }}>
               Além de sempre prezar pela diversão de todos, também preza pelo{" "}
               <strong style={{ color: "#a855f7" }}>compromisso, responsabilidade e pontualidade</strong>, tanto com mestres quanto com jogadores.
             </p>
@@ -453,11 +453,11 @@ function Sistemas() {
               { label: "Taxa de entrada",valor: "4 sessões (abatida no final)" },
             ].map((v, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i < 3 ? "1px solid #2d1b69" : "none" }}>
-                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#7c3aed" }}>{v.label}</span>
+                <span style={{ fontFamily: "'Lato', sans-serif", fontSize: 13, color: "#7c3aed" }}>{v.label}</span>
                 <span style={{ fontFamily: "'Cinzel', serif", fontSize: 13, fontWeight: 700, color: "#e2d0ff" }}>{v.valor}</span>
               </div>
             ))}
-            <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "#9d8bbf", marginTop: 12, textAlign: "center" }}>
+            <p style={{ fontFamily: "'Lato', sans-serif", fontSize: 11, color: "#9d8bbf", marginTop: 12, textAlign: "center" }}>
               Não pode pagar a taxa? Entre sem ela e pague apenas se precisar sair da mesa.
             </p>
           </div>
@@ -489,7 +489,7 @@ function Contrato() {
             <div key={i} className="card" style={{ padding: "24px 18px", textAlign: "center" }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>{r.icon}</div>
               <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700, color: "#c084fc", marginBottom: 10, letterSpacing: 0.5 }}>{r.titulo}</div>
-              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "#9d8bbf", lineHeight: 1.6 }}>{r.desc}</div>
+              <div style={{ fontFamily: "'Lato', sans-serif", fontSize: 12, color: "#9d8bbf", lineHeight: 1.6 }}>{r.desc}</div>
             </div>
           ))}
         </div>
@@ -616,7 +616,7 @@ function Formulario({ onVoltar }: { onVoltar: () => void }) {
           <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 32, fontWeight: 900, color: "#c084fc", marginBottom: 16 }}>
             Aventura Iniciada!
           </h2>
-          <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "#9d8bbf", lineHeight: 1.7, marginBottom: 32, maxWidth: 400 }}>
+          <p style={{ fontFamily: "'Lato', sans-serif", fontSize: 16, color: "#9d8bbf", lineHeight: 1.7, marginBottom: 32, maxWidth: 400 }}>
 Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsApp para te apresentar as mesas disponíveis. 🧙          </p>
           <button type="button" className="btn-primary" onClick={onVoltar} style={{ padding: "14px 32px", fontSize: 14 }}>
             ← Voltar ao início
@@ -739,7 +739,7 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
         {/* ── STEP 2: Confirmações ── */}
         {step === 2 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#9d8bbf", lineHeight: 1.6, marginBottom: 8 }}>
+            <p style={{ fontFamily: "'Lato', sans-serif", fontSize: 13, color: "#9d8bbf", lineHeight: 1.6, marginBottom: 8 }}>
               Por favor, confirme que você está ciente de cada item abaixo para concluir sua inscrição:
             </p>
 
@@ -770,7 +770,7 @@ Recebemos sua inscrição! Em breve nossa equipe entrará em contato pelo WhatsA
                   }}>
                     {val === "Sim" && <span style={{ color: "#fff", fontSize: 12 }}>✓</span>}
                   </div>
-                  <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: val === "Sim" ? "#e2d0ff" : "#b5a9c8", lineHeight: 1.5 }}>{txt}</span>
+                  <span style={{ fontFamily: "'Lato', sans-serif", fontSize: 13, color: val === "Sim" ? "#e2d0ff" : "#b5a9c8", lineHeight: 1.5 }}>{txt}</span>
                 </button>
               );
             })}
@@ -881,7 +881,7 @@ export default function LandingPage({ onAbrirDashboard }: { onAbrirDashboard: ()
               <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: "clamp(22px, 4vw, 34px)", fontWeight: 900, color: "#e879f9", marginBottom: 16 }}>
                 Pronto para sua aventura?
               </h2>
-              <p style={{ fontFamily: "'Manrope', sans-serif", color: "#9d8bbf", fontSize: 15, marginBottom: 32, lineHeight: 1.7 }}>
+              <p style={{ fontFamily: "'Lato', sans-serif", color: "#9d8bbf", fontSize: 15, marginBottom: 32, lineHeight: 1.7 }}>
                 Preencha nosso formulário e em breve entraremos em contato para te apresentar as mesas disponíveis.
               </p>
               <button type="button" className="btn-primary" onClick={() => navigate("form")}
