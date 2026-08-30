@@ -43,7 +43,7 @@ async function salvarCliente(data: Record<string, string>): Promise<void> {
 
 // ─── UTM / origem ─────────────────────────────────────────────────────────
 function cleanTrackingValue(value: string | null, max = 100): string {
-  return (value ?? "").replace(/[\u0000-\u001F\u007F]/g, "").trim().slice(0, max);
+  return [...(value ?? "")].filter(char=>{const code=char.charCodeAt(0);return code>31&&code!==127}).join("").trim().slice(0, max);
 }
 function safeInfluencerCode(value: string | null): string {
   const code = cleanTrackingValue(value, 64).toLowerCase();
